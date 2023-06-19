@@ -25,12 +25,11 @@ pub struct Vector3 {
     pub _pad: f32,
 }
 
-unsafe fn new_window_resources(
+unsafe fn new_framebuffers(
+    framebuffers: &mut Vec<vk::Framebuffer>,
     window: &winit::window::Window,
     base: &ExampleBase,
     renderpass: vk::RenderPass,
-    framebuffers: &mut Vec<vk::Framebuffer>,
-    viewports: &mut [vk::Viewport; 1],
 ) {
     // TODO: This is duplicate code:
     for framebuffer in framebuffers.iter() {
@@ -38,11 +37,6 @@ unsafe fn new_window_resources(
     }
 
     framebuffers.clear();
-
-    println!(
-        "{} {}",
-        base.surface_resolution.width, base.surface_resolution.height
-    );
 
     let window_size = window.inner_size();
 
@@ -62,15 +56,6 @@ unsafe fn new_window_resources(
                 .unwrap(),
         );
     }
-
-    viewports[0] = vk::Viewport {
-        x: 0.0,
-        y: 0.0,
-        width: window_size.width as f32,
-        height: window_size.height as f32,
-        min_depth: 0.0,
-        max_depth: 1.0,
-    };
 }
 
 fn main() {
@@ -136,8 +121,9 @@ fn main() {
             .create_render_pass(&renderpass_create_info, None)
             .unwrap();
 
-        // TODO: Setup framebuffers:
         let mut framebuffers = Vec::<vk::Framebuffer>::new();
+        new_framebuffers(&mut framebuffers, &window, &base, renderpass);
+
         let index_buffer_data = [0u32, 1, 2, 2, 3, 0];
         let index_buffer_info = vk::BufferCreateInfo {
             size: std::mem::size_of_val(&index_buffer_data) as u64,
@@ -662,16 +648,15 @@ fn main() {
             topology: vk::PrimitiveTopology::TRIANGLE_LIST,
             ..Default::default()
         };
-        // TODO: let viewports = [vk::Viewport {
-        //     x: 0.0,
-        //     y: 0.0,
-        //     width: base.surface_resolution.width as f32,
-        //     height: base.surface_resolution.height as f32,
-        //     min_depth: 0.0,
-        //     max_depth: 1.0,
-        // }];
-        let mut viewports = [vk::Viewport::default()];
-        new_window_resources(&window, &base, renderpass, &mut framebuffers, &mut viewports);
+
+        let mut viewports = [vk::Viewport {
+            x: 0.0,
+            y: 0.0,
+            width: base.surface_resolution.width as f32,
+            height: base.surface_resolution.height as f32,
+            min_depth: 0.0,
+            max_depth: 1.0,
+        }];
 
         let mut scissors = [base.surface_resolution.into()];
         let viewport_state_info = vk::PipelineViewportStateCreateInfo::builder()
@@ -749,6 +734,11 @@ fn main() {
         let graphic_pipeline = graphics_pipelines[0];
 
         ExampleBase::render_loop(&mut event_loop, || {
+            let window_size = window.inner_size();
+            if window_size.width == 0 || window_size.height == 0 {
+                return;
+            }
+
             let (present_index, _) = match base.swapchain_loader.acquire_next_image(
                 base.swapchain,
                 std::u64::MAX,
@@ -758,9 +748,9 @@ fn main() {
                 Ok(values) => values,
                 Err(_) => {
                     base.device.device_wait_idle().unwrap();
-                    let window_size = window.inner_size();
+                    // TODO: This is a duplicate of the same check at the bottom of the loop:
                     base.recreate_swapchain(window_size.width, window_size.height);
-                    new_window_resources(&window, &base, renderpass, &mut framebuffers, &mut viewports);
+                    new_framebuffers(&mut framebuffers, &window, &base, renderpass);
                     return;
                 }
             };
@@ -780,6 +770,8 @@ fn main() {
             ];
 
             // TODO:
+            viewports[0].width = base.surface_resolution.width as f32;
+            viewports[0].height = base.surface_resolution.height as f32;
             scissors[0].extent.width = base.surface_resolution.width;
             scissors[0].extent.height = base.surface_resolution.height;
 
@@ -844,7 +836,6 @@ fn main() {
                     device.cmd_end_render_pass(draw_command_buffer);
                 },
             );
-            //let mut present_info_err = mem::zeroed();
             let present_info = vk::PresentInfoKHR {
                 wait_semaphore_count: 1,
                 p_wait_semaphores: &base.rendering_complete_semaphore,
@@ -861,21 +852,11 @@ fn main() {
                 Ok(_) => {},
                 Err(_) => {
                     base.device.device_wait_idle().unwrap();
-                    let window_size = window.inner_size();
                     base.recreate_swapchain(window_size.width, window_size.height);
-                    new_window_resources(&window, &base, renderpass, &mut framebuffers, &mut viewports);
+                    new_framebuffers(&mut framebuffers, &window, &base, renderpass);
                 },
             }
         });
-        // TODO:
-        // match present_result {
-        //     Ok(_) => {}
-        //     Err(_) => {
-
-        //     }
-        // }
-        // base.recreate_swapchain();
-        // new_window_resources(&base, renderpass, &mut framebuffers, &mut viewports);
 
         base.device.device_wait_idle().unwrap();
 

@@ -1,6 +1,3 @@
-extern crate ash;
-extern crate winit;
-
 use ash::extensions::{
     ext::DebugUtils,
     khr::{Surface, Swapchain},
@@ -231,9 +228,6 @@ impl ExampleBase {
                         ..
                     } => *control_flow = ControlFlow::Exit,
                     Event::MainEventsCleared => f(),
-                    // Event::WindowEvent { event: WindowEvent::Resized(size), .. } => {
-                    //     self.recreate_swapchain(size.width, size.height)
-                    // }
                     _ => (),
                 }
             });
@@ -305,10 +299,6 @@ impl ExampleBase {
             desired_image_count = surface_capabilities.max_image_count;
         }
 
-        // let surface_resolution = match surface_capabilities.current_extent.width {
-        //     std::u32::MAX => vk::Extent2D { width, height },
-        //     _ => surface_capabilities.current_extent,
-        // };
         let surface_resolution = vk::Extent2D { width, height };
         let pre_transform = if surface_capabilities
             .supported_transforms
@@ -611,8 +601,6 @@ impl ExampleBase {
             let surface_format = surface_loader
                 .get_physical_device_surface_formats(pdevice, surface)
                 .unwrap()[0];
-
-            // TODO: Create swapchain
 
             let pool_create_info = vk::CommandPoolCreateInfo::builder()
                 .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
