@@ -8,6 +8,8 @@ use ash::util::*;
 use ash::vk;
 
 use gpu_vk::*;
+use winit::event_loop::EventLoop;
+use winit::window::WindowBuilder;
 
 #[derive(Clone, Debug, Copy)]
 struct Vertex {
@@ -23,9 +25,64 @@ pub struct Vector3 {
     pub _pad: f32,
 }
 
+unsafe fn new_window_resources(
+    window: &winit::window::Window,
+    base: &ExampleBase,
+    renderpass: vk::RenderPass,
+    framebuffers: &mut Vec<vk::Framebuffer>,
+    viewports: &mut [vk::Viewport; 1],
+) {
+    // TODO: This is duplicate code:
+    for framebuffer in framebuffers.iter() {
+        base.device.destroy_framebuffer(*framebuffer, None);
+    }
+
+    framebuffers.clear();
+
+    println!(
+        "{} {}",
+        base.surface_resolution.width, base.surface_resolution.height
+    );
+
+    let window_size = window.inner_size();
+
+    for present_image_view in &base.present_image_views {
+        let framebuffer_attachments = [*present_image_view, base.depth_image_view];
+        let frame_buffer_create_info = vk::FramebufferCreateInfo::builder()
+            .render_pass(renderpass)
+            .attachments(&framebuffer_attachments)
+            .width(window_size.width)
+            .height(window_size.height)
+            .layers(1)
+            .build();
+
+        framebuffers.push(
+            base.device
+                .create_framebuffer(&frame_buffer_create_info, None)
+                .unwrap(),
+        );
+    }
+
+    viewports[0] = vk::Viewport {
+        x: 0.0,
+        y: 0.0,
+        width: window_size.width as f32,
+        height: window_size.height as f32,
+        min_depth: 0.0,
+        max_depth: 1.0,
+    };
+}
+
 fn main() {
     unsafe {
-        let base = ExampleBase::new(640, 480);
+        let mut event_loop = EventLoop::new();
+        let window = WindowBuilder::new()
+            .with_title("Ash - Example")
+            .with_inner_size(winit::dpi::LogicalSize::new(f64::from(640), f64::from(480)))
+            .build(&event_loop)
+            .unwrap();
+
+        let mut base = ExampleBase::new(&window);
 
         let renderpass_attachments = [
             vk::AttachmentDescription {
@@ -79,24 +136,8 @@ fn main() {
             .create_render_pass(&renderpass_create_info, None)
             .unwrap();
 
-        let framebuffers: Vec<vk::Framebuffer> = base
-            .present_image_views
-            .iter()
-            .map(|&present_image_view| {
-                let framebuffer_attachments = [present_image_view, base.depth_image_view];
-                let frame_buffer_create_info = vk::FramebufferCreateInfo::builder()
-                    .render_pass(renderpass)
-                    .attachments(&framebuffer_attachments)
-                    .width(base.surface_resolution.width)
-                    .height(base.surface_resolution.height)
-                    .layers(1)
-                    .build();
-
-                base.device
-                    .create_framebuffer(&frame_buffer_create_info, None)
-                    .unwrap()
-            })
-            .collect();
+        // TODO: Setup framebuffers:
+        let mut framebuffers = Vec::<vk::Framebuffer>::new();
         let index_buffer_data = [0u32, 1, 2, 2, 3, 0];
         let index_buffer_info = vk::BufferCreateInfo {
             size: std::mem::size_of_val(&index_buffer_data) as u64,
@@ -495,8 +536,9 @@ fn main() {
                 ..Default::default()
             },
         ];
-        let descriptor_info =
-            vk::DescriptorSetLayoutCreateInfo::builder().bindings(&desc_layout_bindings).build();
+        let descriptor_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&desc_layout_bindings)
+            .build();
 
         let desc_set_layouts = [base
             .device
@@ -548,11 +590,15 @@ fn main() {
 
         let vertex_code =
             read_spv(&mut vertex_spv_file).expect("Failed to read vertex shader spv file");
-        let vertex_shader_info = vk::ShaderModuleCreateInfo::builder().code(&vertex_code).build();
+        let vertex_shader_info = vk::ShaderModuleCreateInfo::builder()
+            .code(&vertex_code)
+            .build();
 
         let frag_code =
             read_spv(&mut frag_spv_file).expect("Failed to read fragment shader spv file");
-        let frag_shader_info = vk::ShaderModuleCreateInfo::builder().code(&frag_code).build();
+        let frag_shader_info = vk::ShaderModuleCreateInfo::builder()
+            .code(&frag_code)
+            .build();
 
         let vertex_shader_module = base
             .device
@@ -564,8 +610,9 @@ fn main() {
             .create_shader_module(&frag_shader_info, None)
             .expect("Fragment shader module error");
 
-        let layout_create_info =
-            vk::PipelineLayoutCreateInfo::builder().set_layouts(&desc_set_layouts).build();
+        let layout_create_info = vk::PipelineLayoutCreateInfo::builder()
+            .set_layouts(&desc_set_layouts)
+            .build();
 
         let pipeline_layout = base
             .device
@@ -615,15 +662,18 @@ fn main() {
             topology: vk::PrimitiveTopology::TRIANGLE_LIST,
             ..Default::default()
         };
-        let viewports = [vk::Viewport {
-            x: 0.0,
-            y: 0.0,
-            width: base.surface_resolution.width as f32,
-            height: base.surface_resolution.height as f32,
-            min_depth: 0.0,
-            max_depth: 1.0,
-        }];
-        let scissors = [base.surface_resolution.into()];
+        // TODO: let viewports = [vk::Viewport {
+        //     x: 0.0,
+        //     y: 0.0,
+        //     width: base.surface_resolution.width as f32,
+        //     height: base.surface_resolution.height as f32,
+        //     min_depth: 0.0,
+        //     max_depth: 1.0,
+        // }];
+        let mut viewports = [vk::Viewport::default()];
+        new_window_resources(&window, &base, renderpass, &mut framebuffers, &mut viewports);
+
+        let mut scissors = [base.surface_resolution.into()];
         let viewport_state_info = vk::PipelineViewportStateCreateInfo::builder()
             .scissors(&scissors)
             .viewports(&viewports)
@@ -673,8 +723,9 @@ fn main() {
             .build();
 
         let dynamic_state = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
-        let dynamic_state_info =
-            vk::PipelineDynamicStateCreateInfo::builder().dynamic_states(&dynamic_state).build();
+        let dynamic_state_info = vk::PipelineDynamicStateCreateInfo::builder()
+            .dynamic_states(&dynamic_state)
+            .build();
 
         let graphic_pipeline_infos = vk::GraphicsPipelineCreateInfo::builder()
             .stages(&shader_stage_create_infos)
@@ -697,16 +748,23 @@ fn main() {
 
         let graphic_pipeline = graphics_pipelines[0];
 
-        base.render_loop(|| {
-            let (present_index, _) = base
-                .swapchain_loader
-                .acquire_next_image(
-                    base.swapchain,
-                    std::u64::MAX,
-                    base.present_complete_semaphore,
-                    vk::Fence::null(),
-                )
-                .unwrap();
+        ExampleBase::render_loop(&mut event_loop, || {
+            let (present_index, _) = match base.swapchain_loader.acquire_next_image(
+                base.swapchain,
+                std::u64::MAX,
+                base.present_complete_semaphore,
+                vk::Fence::null(),
+            ) {
+                Ok(values) => values,
+                Err(_) => {
+                    base.device.device_wait_idle().unwrap();
+                    let window_size = window.inner_size();
+                    base.recreate_swapchain(window_size.width, window_size.height);
+                    new_window_resources(&window, &base, renderpass, &mut framebuffers, &mut viewports);
+                    return;
+                }
+            };
+
             let clear_values = [
                 vk::ClearValue {
                     color: vk::ClearColorValue {
@@ -720,6 +778,10 @@ fn main() {
                     },
                 },
             ];
+
+            // TODO:
+            scissors[0].extent.width = base.surface_resolution.width;
+            scissors[0].extent.height = base.surface_resolution.height;
 
             let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
                 .render_pass(renderpass)
@@ -791,10 +853,30 @@ fn main() {
                 p_image_indices: &present_index,
                 ..Default::default()
             };
-            base.swapchain_loader
+
+            match base
+                .swapchain_loader
                 .queue_present(base.present_queue, &present_info)
-                .unwrap();
+            {
+                Ok(_) => {},
+                Err(_) => {
+                    base.device.device_wait_idle().unwrap();
+                    let window_size = window.inner_size();
+                    base.recreate_swapchain(window_size.width, window_size.height);
+                    new_window_resources(&window, &base, renderpass, &mut framebuffers, &mut viewports);
+                },
+            }
         });
+        // TODO:
+        // match present_result {
+        //     Ok(_) => {}
+        //     Err(_) => {
+
+        //     }
+        // }
+        // base.recreate_swapchain();
+        // new_window_resources(&base, renderpass, &mut framebuffers, &mut viewports);
+
         base.device.device_wait_idle().unwrap();
 
         for pipeline in graphics_pipelines {
