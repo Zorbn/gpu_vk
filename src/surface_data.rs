@@ -6,3 +6,11 @@ pub struct SurfaceData {
     pub surface_format: vk::SurfaceFormatKHR,
     pub surface_resolution: vk::Extent2D,
 }
+
+impl Drop for SurfaceData {
+    fn drop(&mut self) {
+        unsafe {
+            self.surface_loader.destroy_surface(self.surface, None);
+        }
+    }
+}

@@ -1,6 +1,7 @@
 use ash::vk;
 
 pub struct DeviceData {
+    pub instance: ash::Instance,
     pub device: ash::Device,
     pub pdevice: vk::PhysicalDevice, // TODO: Rename this
     pub memory_properties: vk::PhysicalDeviceMemoryProperties,
@@ -80,4 +81,13 @@ impl DeviceData {
             .map(|(index, _memory_type)| index as _)
     }
 
+}
+
+impl Drop for DeviceData {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.destroy_device(None);
+            self.instance.destroy_instance(None);
+        }
+    }
 }

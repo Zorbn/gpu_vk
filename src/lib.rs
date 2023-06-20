@@ -73,15 +73,14 @@ unsafe extern "system" fn vulkan_debug_callback(
 
 pub struct ExampleBase {
     pub entry: Entry,
-    pub instance: ash::Instance,
     pub debug_utils_loader: DebugUtils,
     pub debug_call_back: vk::DebugUtilsMessengerEXT,
 
-    pub device_data: rc::Rc<DeviceData>,
-    pub surface_data: SurfaceData,
     pub swapchain_data: SwapchainData,
-    pub command_data: CommandData,
     pub sync_data: SyncData,
+    pub command_data: CommandData,
+    pub surface_data: SurfaceData,
+    pub device_data: rc::Rc<DeviceData>,
 }
 
 impl ExampleBase {
@@ -105,6 +104,7 @@ impl ExampleBase {
     pub fn render_loop<F: FnMut()>(event_loop: &mut EventLoop<()>, mut f: F) {
         event_loop.run_return(|event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
+
             match event {
                 Event::WindowEvent {
                     event:
@@ -137,7 +137,6 @@ impl ExampleBase {
                 &self.surface_data,
                 &self.command_data,
                 &self.sync_data,
-                &self.instance,
             );
         }
     }
@@ -327,6 +326,7 @@ impl ExampleBase {
             };
 
             let device_data = rc::Rc::new(DeviceData {
+                instance,
                 device,
                 pdevice,
                 memory_properties: device_memory_properties,
@@ -335,6 +335,7 @@ impl ExampleBase {
             });
 
             let command_data = CommandData {
+                device_data: device_data.clone(),
                 pool,
                 draw_command_buffer,
                 setup_command_buffer,
@@ -350,6 +351,7 @@ impl ExampleBase {
                 .unwrap();
 
             let sync_data = SyncData {
+                device_data: device_data.clone(),
                 present_complete_semaphore,
                 rendering_complete_semaphore,
                 draw_commands_reuse_fence,
@@ -361,12 +363,10 @@ impl ExampleBase {
                 &surface_data,
                 &command_data,
                 &sync_data,
-                &instance,
             );
 
             ExampleBase {
                 entry,
-                instance,
                 device_data,
                 debug_call_back,
                 debug_utils_loader,
@@ -382,28 +382,12 @@ impl ExampleBase {
 impl Drop for ExampleBase {
     fn drop(&mut self) {
         unsafe {
-            // TODO:
             self.device_data.device.device_wait_idle().unwrap();
-            self.device_data.device
-                .destroy_semaphore(self.sync_data.present_complete_semaphore, None);
-            self.device_data.device
-                .destroy_semaphore(self.sync_data.rendering_complete_semaphore, None);
-            self.device_data.device
-                .destroy_fence(self.sync_data.draw_commands_reuse_fence, None);
-            self.device_data.device
-                .destroy_fence(self.sync_data.setup_commands_reuse_fence, None);
 
             self.swapchain_data.destroy();
 
-            self.device_data.device
-                .destroy_command_pool(self.command_data.pool, None);
-            self.device_data.device.destroy_device(None);
-            self.surface_data
-                .surface_loader
-                .destroy_surface(self.surface_data.surface, None);
             self.debug_utils_loader
                 .destroy_debug_utils_messenger(self.debug_call_back, None);
-            self.instance.destroy_instance(None);
         }
     }
 }

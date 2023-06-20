@@ -25,7 +25,6 @@ impl SwapchainData {
         surface_data: &SurfaceData,
         command_data: &CommandData,
         sync_data: &SyncData,
-        instance: &ash::Instance,
     ) -> SwapchainData {
         let surface_capabilities = surface_data
             .surface_loader
@@ -61,7 +60,7 @@ impl SwapchainData {
             .cloned()
             .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
             .unwrap_or(vk::PresentModeKHR::FIFO);
-        let swapchain_loader = khr::Swapchain::new(instance, &device_data.device);
+        let swapchain_loader = khr::Swapchain::new(&device_data.instance, &device_data.device);
 
         let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
             .surface(surface_data.surface)
@@ -210,7 +209,6 @@ impl SwapchainData {
         surface_data: &SurfaceData,
         command_data: &CommandData,
         sync_data: &SyncData,
-        instance: &ash::Instance,
     ) {
         self.destroy();
 
@@ -219,7 +217,6 @@ impl SwapchainData {
             surface_data,
             command_data,
             sync_data,
-            instance,
         );
 
         self.swapchain_loader = new_swapchain_data.swapchain_loader;
