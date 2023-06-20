@@ -25,7 +25,7 @@ impl SwapchainData {
         surface_data: &SurfaceData,
         command_data: &CommandData,
         sync_data: &SyncData,
-    ) -> SwapchainData {
+    ) -> Self {
         let surface_capabilities = surface_data
             .surface_loader
             .get_physical_device_surface_capabilities(
@@ -192,8 +192,8 @@ impl SwapchainData {
             .create_image_view(&depth_image_view_info, None)
             .unwrap();
 
-        SwapchainData {
-            device_data: device_data.clone(),
+        Self {
+            device_data,
             swapchain_loader,
             swapchain,
             present_images,

@@ -14,6 +14,42 @@ pub struct SyncData {
     pub setup_commands_reuse_fence: vk::Fence,
 }
 
+impl SyncData {
+    pub unsafe fn new(device_data: rc::Rc<DeviceData>) -> Self {
+        let semaphore_create_info = vk::SemaphoreCreateInfo::default();
+
+        let present_complete_semaphore = device_data
+            .device
+            .create_semaphore(&semaphore_create_info, None)
+            .unwrap();
+        let rendering_complete_semaphore = device_data
+            .device
+            .create_semaphore(&semaphore_create_info, None)
+            .unwrap();
+
+        let fence_create_info = vk::FenceCreateInfo::builder()
+            .flags(vk::FenceCreateFlags::SIGNALED)
+            .build();
+
+        let draw_commands_reuse_fence = device_data
+            .device
+            .create_fence(&fence_create_info, None)
+            .expect("Create fence failed.");
+        let setup_commands_reuse_fence = device_data
+            .device
+            .create_fence(&fence_create_info, None)
+            .expect("Create fence failed.");
+
+        Self {
+            device_data,
+            present_complete_semaphore,
+            rendering_complete_semaphore,
+            draw_commands_reuse_fence,
+            setup_commands_reuse_fence,
+        }
+    }
+}
+
 impl Drop for SyncData {
     fn drop(&mut self) {
         unsafe {

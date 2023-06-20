@@ -133,11 +133,8 @@ impl ExampleBase {
         self.surface_data.surface_resolution.height = window_height;
 
         unsafe {
-            self.swapchain_data.recreate(
-                &self.surface_data,
-                &self.command_data,
-                &self.sync_data,
-            );
+            self.swapchain_data
+                .recreate(&self.surface_data, &self.command_data, &self.sync_data);
         }
     }
 
@@ -301,17 +298,6 @@ impl ExampleBase {
 
             let device_memory_properties = instance.get_physical_device_memory_properties(pdevice);
 
-            let fence_create_info = vk::FenceCreateInfo::builder()
-                .flags(vk::FenceCreateFlags::SIGNALED)
-                .build();
-
-            let draw_commands_reuse_fence = device
-                .create_fence(&fence_create_info, None)
-                .expect("Create fence failed.");
-            let setup_commands_reuse_fence = device
-                .create_fence(&fence_create_info, None)
-                .expect("Create fence failed.");
-
             let window_size = window.inner_size();
 
             // TODO: Reorganize these to be local to where their fields are initialized, maybe in seperate functions like the swapchain is.
@@ -341,22 +327,7 @@ impl ExampleBase {
                 setup_command_buffer,
             };
 
-            let semaphore_create_info = vk::SemaphoreCreateInfo::default();
-
-            let present_complete_semaphore = device_data.device
-                .create_semaphore(&semaphore_create_info, None)
-                .unwrap();
-            let rendering_complete_semaphore = device_data.device
-                .create_semaphore(&semaphore_create_info, None)
-                .unwrap();
-
-            let sync_data = SyncData {
-                device_data: device_data.clone(),
-                present_complete_semaphore,
-                rendering_complete_semaphore,
-                draw_commands_reuse_fence,
-                setup_commands_reuse_fence,
-            };
+            let sync_data = SyncData::new(device_data.clone());
 
             let swapchain_data = SwapchainData::new(
                 device_data.clone(),
