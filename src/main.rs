@@ -33,7 +33,9 @@ unsafe fn new_framebuffers(
 ) {
     // TODO: This is duplicate code:
     for framebuffer in framebuffers.iter() {
-        base.device.destroy_framebuffer(*framebuffer, None);
+        base.device_data
+            .device
+            .destroy_framebuffer(*framebuffer, None);
     }
 
     framebuffers.clear();
@@ -51,7 +53,8 @@ unsafe fn new_framebuffers(
             .build();
 
         framebuffers.push(
-            base.device
+            base.device_data
+                .device
                 .create_framebuffer(&frame_buffer_create_info, None)
                 .unwrap(),
         );
@@ -117,6 +120,7 @@ fn main() {
             .build();
 
         let renderpass = base
+            .device_data
             .device
             .create_render_pass(&renderpass_create_info, None)
             .unwrap();
@@ -131,11 +135,17 @@ fn main() {
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
         };
-        let index_buffer = base.device.create_buffer(&index_buffer_info, None).unwrap();
-        let index_buffer_memory_req = base.device.get_buffer_memory_requirements(index_buffer);
-        let index_buffer_memory_index = vk_helpers::find_memory_type_index(
+        let index_buffer = base
+            .device_data
+            .device
+            .create_buffer(&index_buffer_info, None)
+            .unwrap();
+        let index_buffer_memory_req = base
+            .device_data
+            .device
+            .get_buffer_memory_requirements(index_buffer);
+        let index_buffer_memory_index = base.device_data.find_memory_type_index(
             &index_buffer_memory_req,
-            &base.physical_device_data.device_memory_properties,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )
         .expect("Unable to find suitable memorytype for the index buffer.");
@@ -145,10 +155,12 @@ fn main() {
             ..Default::default()
         };
         let index_buffer_memory = base
+            .device_data
             .device
             .allocate_memory(&index_allocate_info, None)
             .unwrap();
         let index_ptr: *mut c_void = base
+            .device_data
             .device
             .map_memory(
                 index_buffer_memory,
@@ -163,8 +175,9 @@ fn main() {
             index_buffer_memory_req.size,
         );
         index_slice.copy_from_slice(&index_buffer_data);
-        base.device.unmap_memory(index_buffer_memory);
-        base.device
+        base.device_data.device.unmap_memory(index_buffer_memory);
+        base.device_data
+            .device
             .bind_buffer_memory(index_buffer, index_buffer_memory, 0)
             .unwrap();
 
@@ -193,15 +206,16 @@ fn main() {
             ..Default::default()
         };
         let vertex_input_buffer = base
+            .device_data
             .device
             .create_buffer(&vertex_input_buffer_info, None)
             .unwrap();
         let vertex_input_buffer_memory_req = base
+            .device_data
             .device
             .get_buffer_memory_requirements(vertex_input_buffer);
-        let vertex_input_buffer_memory_index = vk_helpers::find_memory_type_index(
+        let vertex_input_buffer_memory_index = base.device_data.find_memory_type_index(
             &vertex_input_buffer_memory_req,
-            &base.physical_device_data.device_memory_properties,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )
         .expect("Unable to find suitable memorytype for the vertex buffer.");
@@ -212,11 +226,13 @@ fn main() {
             ..Default::default()
         };
         let vertex_input_buffer_memory = base
+            .device_data
             .device
             .allocate_memory(&vertex_buffer_allocate_info, None)
             .unwrap();
 
         let vert_ptr = base
+            .device_data
             .device
             .map_memory(
                 vertex_input_buffer_memory,
@@ -231,8 +247,11 @@ fn main() {
             vertex_input_buffer_memory_req.size,
         );
         slice.copy_from_slice(&vertices);
-        base.device.unmap_memory(vertex_input_buffer_memory);
-        base.device
+        base.device_data
+            .device
+            .unmap_memory(vertex_input_buffer_memory);
+        base.device_data
+            .device
             .bind_buffer_memory(vertex_input_buffer, vertex_input_buffer_memory, 0)
             .unwrap();
 
@@ -249,15 +268,16 @@ fn main() {
             ..Default::default()
         };
         let uniform_color_buffer = base
+            .device_data
             .device
             .create_buffer(&uniform_color_buffer_info, None)
             .unwrap();
         let uniform_color_buffer_memory_req = base
+            .device_data
             .device
             .get_buffer_memory_requirements(uniform_color_buffer);
-        let uniform_color_buffer_memory_index = vk_helpers::find_memory_type_index(
+        let uniform_color_buffer_memory_index = base.device_data.find_memory_type_index(
             &uniform_color_buffer_memory_req,
-            &base.physical_device_data.device_memory_properties,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )
         .expect("Unable to find suitable memorytype for the vertex buffer.");
@@ -268,10 +288,12 @@ fn main() {
             ..Default::default()
         };
         let uniform_color_buffer_memory = base
+            .device_data
             .device
             .allocate_memory(&uniform_color_buffer_allocate_info, None)
             .unwrap();
         let uniform_ptr = base
+            .device_data
             .device
             .map_memory(
                 uniform_color_buffer_memory,
@@ -286,8 +308,11 @@ fn main() {
             uniform_color_buffer_memory_req.size,
         );
         uniform_aligned_slice.copy_from_slice(&[uniform_color_buffer_data]);
-        base.device.unmap_memory(uniform_color_buffer_memory);
-        base.device
+        base.device_data
+            .device
+            .unmap_memory(uniform_color_buffer_memory);
+        base.device_data
+            .device
             .bind_buffer_memory(uniform_color_buffer, uniform_color_buffer_memory, 0)
             .unwrap();
 
@@ -303,11 +328,17 @@ fn main() {
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
         };
-        let image_buffer = base.device.create_buffer(&image_buffer_info, None).unwrap();
-        let image_buffer_memory_req = base.device.get_buffer_memory_requirements(image_buffer);
-        let image_buffer_memory_index = vk_helpers::find_memory_type_index(
+        let image_buffer = base
+            .device_data
+            .device
+            .create_buffer(&image_buffer_info, None)
+            .unwrap();
+        let image_buffer_memory_req = base
+            .device_data
+            .device
+            .get_buffer_memory_requirements(image_buffer);
+        let image_buffer_memory_index = base.device_data.find_memory_type_index(
             &image_buffer_memory_req,
-            &base.physical_device_data.device_memory_properties,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )
         .expect("Unable to find suitable memorytype for the image buffer.");
@@ -318,10 +349,12 @@ fn main() {
             ..Default::default()
         };
         let image_buffer_memory = base
+            .device_data
             .device
             .allocate_memory(&image_buffer_allocate_info, None)
             .unwrap();
         let image_ptr = base
+            .device_data
             .device
             .map_memory(
                 image_buffer_memory,
@@ -336,8 +369,9 @@ fn main() {
             image_buffer_memory_req.size,
         );
         image_slice.copy_from_slice(&image_data);
-        base.device.unmap_memory(image_buffer_memory);
-        base.device
+        base.device_data.device.unmap_memory(image_buffer_memory);
+        base.device_data
+            .device
             .bind_buffer_memory(image_buffer, image_buffer_memory, 0)
             .unwrap();
 
@@ -354,13 +388,16 @@ fn main() {
             ..Default::default()
         };
         let texture_image = base
+            .device_data
             .device
             .create_image(&texture_create_info, None)
             .unwrap();
-        let texture_memory_req = base.device.get_image_memory_requirements(texture_image);
-        let texture_memory_index = vk_helpers::find_memory_type_index(
+        let texture_memory_req = base
+            .device_data
+            .device
+            .get_image_memory_requirements(texture_image);
+        let texture_memory_index = base.device_data.find_memory_type_index(
             &texture_memory_req,
-            &base.physical_device_data.device_memory_properties,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )
         .expect("Unable to find suitable memory index for depth image.");
@@ -371,18 +408,18 @@ fn main() {
             ..Default::default()
         };
         let texture_memory = base
+            .device_data
             .device
             .allocate_memory(&texture_allocate_info, None)
             .unwrap();
-        base.device
+        base.device_data
+            .device
             .bind_image_memory(texture_image, texture_memory, 0)
             .expect("Unable to bind depth image memory");
 
-        vk_helpers::record_submit_commandbuffer(
-            &base.device,
+        base.device_data.record_submit(
             base.command_data.setup_command_buffer,
             base.sync_data.setup_commands_reuse_fence,
-            base.physical_device_data.present_queue,
             &[],
             &[],
             &[],
@@ -464,7 +501,11 @@ fn main() {
             ..Default::default()
         };
 
-        let sampler = base.device.create_sampler(&sampler_info, None).unwrap();
+        let sampler = base
+            .device_data
+            .device
+            .create_sampler(&sampler_info, None)
+            .unwrap();
 
         let tex_image_view_info = vk::ImageViewCreateInfo {
             view_type: vk::ImageViewType::TYPE_2D,
@@ -485,6 +526,7 @@ fn main() {
             ..Default::default()
         };
         let tex_image_view = base
+            .device_data
             .device
             .create_image_view(&tex_image_view_info, None)
             .unwrap();
@@ -504,6 +546,7 @@ fn main() {
             .build();
 
         let descriptor_pool = base
+            .device_data
             .device
             .create_descriptor_pool(&descriptor_pool_info, None)
             .unwrap();
@@ -527,6 +570,7 @@ fn main() {
             .build();
 
         let desc_set_layouts = [base
+            .device_data
             .device
             .create_descriptor_set_layout(&descriptor_info, None)
             .unwrap()];
@@ -536,6 +580,7 @@ fn main() {
             .set_layouts(&desc_set_layouts)
             .build();
         let descriptor_sets = base
+            .device_data
             .device
             .allocate_descriptor_sets(&desc_alloc_info)
             .unwrap();
@@ -569,7 +614,9 @@ fn main() {
                 ..Default::default()
             },
         ];
-        base.device.update_descriptor_sets(&write_desc_sets, &[]);
+        base.device_data
+            .device
+            .update_descriptor_sets(&write_desc_sets, &[]);
 
         let mut vertex_spv_file = Cursor::new(&include_bytes!("../shader/texture/vert.spv")[..]);
         let mut frag_spv_file = Cursor::new(&include_bytes!("../shader/texture/frag.spv")[..]);
@@ -587,11 +634,13 @@ fn main() {
             .build();
 
         let vertex_shader_module = base
+            .device_data
             .device
             .create_shader_module(&vertex_shader_info, None)
             .expect("Vertex shader module error");
 
         let fragment_shader_module = base
+            .device_data
             .device
             .create_shader_module(&frag_shader_info, None)
             .expect("Fragment shader module error");
@@ -601,6 +650,7 @@ fn main() {
             .build();
 
         let pipeline_layout = base
+            .device_data
             .device
             .create_pipeline_layout(&layout_create_info, None)
             .unwrap();
@@ -727,6 +777,7 @@ fn main() {
             .build();
 
         let graphics_pipelines = base
+            .device_data
             .device
             .create_graphics_pipelines(vk::PipelineCache::null(), &[graphic_pipeline_infos], None)
             .unwrap();
@@ -747,7 +798,7 @@ fn main() {
             ) {
                 Ok(values) => values,
                 Err(_) => {
-                    base.device.device_wait_idle().unwrap();
+                    base.device_data.device.device_wait_idle().unwrap();
                     // TODO: This is a duplicate of the same check at the bottom of the loop:
                     base.resize(window_size.width, window_size.height);
                     new_framebuffers(&mut framebuffers, &window, &base, renderpass);
@@ -781,11 +832,9 @@ fn main() {
                 .clear_values(&clear_values)
                 .build();
 
-            vk_helpers::record_submit_commandbuffer(
-                &base.device,
+            base.device_data.record_submit(
                 base.command_data.draw_command_buffer,
                 base.sync_data.draw_commands_reuse_fence,
-                base.physical_device_data.present_queue,
                 &[vk::PipelineStageFlags::BOTTOM_OF_PIPE],
                 &[base.sync_data.present_complete_semaphore],
                 &[base.sync_data.rendering_complete_semaphore],
@@ -847,47 +896,72 @@ fn main() {
             match base
                 .swapchain_data
                 .swapchain_loader
-                .queue_present(base.physical_device_data.present_queue, &present_info)
+                .queue_present(base.device_data.present_queue, &present_info)
             {
                 Ok(_) => {}
                 Err(_) => {
-                    base.device.device_wait_idle().unwrap();
+                    base.device_data.device.device_wait_idle().unwrap();
                     base.resize(window_size.width, window_size.height);
                     new_framebuffers(&mut framebuffers, &window, &base, renderpass);
                 }
             }
         });
 
-        base.device.device_wait_idle().unwrap();
+        base.device_data.device.device_wait_idle().unwrap();
 
         for pipeline in graphics_pipelines {
-            base.device.destroy_pipeline(pipeline, None);
+            base.device_data.device.destroy_pipeline(pipeline, None);
         }
-        base.device.destroy_pipeline_layout(pipeline_layout, None);
-        base.device
+        base.device_data
+            .device
+            .destroy_pipeline_layout(pipeline_layout, None);
+        base.device_data
+            .device
             .destroy_shader_module(vertex_shader_module, None);
-        base.device
+        base.device_data
+            .device
             .destroy_shader_module(fragment_shader_module, None);
-        base.device.free_memory(image_buffer_memory, None);
-        base.device.destroy_buffer(image_buffer, None);
-        base.device.free_memory(texture_memory, None);
-        base.device.destroy_image_view(tex_image_view, None);
-        base.device.destroy_image(texture_image, None);
-        base.device.free_memory(index_buffer_memory, None);
-        base.device.destroy_buffer(index_buffer, None);
-        base.device.free_memory(uniform_color_buffer_memory, None);
-        base.device.destroy_buffer(uniform_color_buffer, None);
-        base.device.free_memory(vertex_input_buffer_memory, None);
-        base.device.destroy_buffer(vertex_input_buffer, None);
+        base.device_data
+            .device
+            .free_memory(image_buffer_memory, None);
+        base.device_data.device.destroy_buffer(image_buffer, None);
+        base.device_data.device.free_memory(texture_memory, None);
+        base.device_data
+            .device
+            .destroy_image_view(tex_image_view, None);
+        base.device_data.device.destroy_image(texture_image, None);
+        base.device_data
+            .device
+            .free_memory(index_buffer_memory, None);
+        base.device_data.device.destroy_buffer(index_buffer, None);
+        base.device_data
+            .device
+            .free_memory(uniform_color_buffer_memory, None);
+        base.device_data
+            .device
+            .destroy_buffer(uniform_color_buffer, None);
+        base.device_data
+            .device
+            .free_memory(vertex_input_buffer_memory, None);
+        base.device_data
+            .device
+            .destroy_buffer(vertex_input_buffer, None);
         for &descriptor_set_layout in desc_set_layouts.iter() {
-            base.device
+            base.device_data
+                .device
                 .destroy_descriptor_set_layout(descriptor_set_layout, None);
         }
-        base.device.destroy_descriptor_pool(descriptor_pool, None);
-        base.device.destroy_sampler(sampler, None);
+        base.device_data
+            .device
+            .destroy_descriptor_pool(descriptor_pool, None);
+        base.device_data.device.destroy_sampler(sampler, None);
         for framebuffer in framebuffers {
-            base.device.destroy_framebuffer(framebuffer, None);
+            base.device_data
+                .device
+                .destroy_framebuffer(framebuffer, None);
         }
-        base.device.destroy_render_pass(renderpass, None);
+        base.device_data
+            .device
+            .destroy_render_pass(renderpass, None);
     }
 }

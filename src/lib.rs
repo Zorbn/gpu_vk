@@ -1,21 +1,20 @@
 pub mod command_data;
-pub mod physical_device_data;
+pub mod device_data;
 pub mod surface_data;
 pub mod swapchain_data;
 pub mod sync_data;
-pub mod vk_helpers;
 
 use ash::extensions::{ext::DebugUtils, khr};
 use ash::{vk, Entry};
 use command_data::CommandData;
-use physical_device_data::PhysicalDeviceData;
+use device_data::DeviceData;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use std::borrow::Cow;
 use std::default::Default;
 use std::ffi::CStr;
 use std::ops::Drop;
 use std::os::raw::c_char;
-use std::{mem, rc};
+use std::rc;
 use surface_data::SurfaceData;
 use swapchain_data::SwapchainData;
 use sync_data::SyncData;
@@ -75,11 +74,10 @@ unsafe extern "system" fn vulkan_debug_callback(
 pub struct ExampleBase {
     pub entry: Entry,
     pub instance: ash::Instance,
-    pub device: rc::Rc<ash::Device>,
     pub debug_utils_loader: DebugUtils,
     pub debug_call_back: vk::DebugUtilsMessengerEXT,
 
-    pub physical_device_data: PhysicalDeviceData,
+    pub device_data: rc::Rc<DeviceData>,
     pub surface_data: SurfaceData,
     pub swapchain_data: SwapchainData,
     pub command_data: CommandData,
@@ -137,7 +135,6 @@ impl ExampleBase {
         unsafe {
             self.swapchain_data.recreate(
                 &self.surface_data,
-                &self.physical_device_data,
                 &self.command_data,
                 &self.sync_data,
                 &self.instance,
@@ -274,11 +271,9 @@ impl ExampleBase {
                 .enabled_features(&features)
                 .build();
 
-            let device = rc::Rc::new(
-                instance
-                    .create_device(pdevice, &device_create_info, None)
-                    .unwrap(),
-            );
+            let device = instance
+                .create_device(pdevice, &device_create_info, None)
+                .unwrap();
 
             let present_queue = device.get_device_queue(queue_family_index, 0);
 
@@ -331,12 +326,13 @@ impl ExampleBase {
                 },
             };
 
-            let physical_device_data = PhysicalDeviceData {
+            let device_data = rc::Rc::new(DeviceData {
+                device,
                 pdevice,
-                device_memory_properties,
+                memory_properties: device_memory_properties,
                 queue_family_index,
                 present_queue,
-            };
+            });
 
             let command_data = CommandData {
                 pool,
@@ -346,10 +342,10 @@ impl ExampleBase {
 
             let semaphore_create_info = vk::SemaphoreCreateInfo::default();
 
-            let present_complete_semaphore = device
+            let present_complete_semaphore = device_data.device
                 .create_semaphore(&semaphore_create_info, None)
                 .unwrap();
-            let rendering_complete_semaphore = device
+            let rendering_complete_semaphore = device_data.device
                 .create_semaphore(&semaphore_create_info, None)
                 .unwrap();
 
@@ -360,11 +356,9 @@ impl ExampleBase {
                 setup_commands_reuse_fence,
             };
 
-            // TODO: Make this a method of swapchain data.
             let swapchain_data = SwapchainData::new(
-                device.clone(),
+                device_data.clone(),
                 &surface_data,
-                &physical_device_data,
                 &command_data,
                 &sync_data,
                 &instance,
@@ -373,10 +367,9 @@ impl ExampleBase {
             ExampleBase {
                 entry,
                 instance,
-                device,
+                device_data,
                 debug_call_back,
                 debug_utils_loader,
-                physical_device_data,
                 surface_data,
                 swapchain_data,
                 command_data,
@@ -390,22 +383,24 @@ impl Drop for ExampleBase {
     fn drop(&mut self) {
         unsafe {
             // TODO:
-            self.device.device_wait_idle().unwrap();
-            self.device
+            self.device_data.device.device_wait_idle().unwrap();
+            self.device_data.device
                 .destroy_semaphore(self.sync_data.present_complete_semaphore, None);
-            self.device
+            self.device_data.device
                 .destroy_semaphore(self.sync_data.rendering_complete_semaphore, None);
-            self.device
+            self.device_data.device
                 .destroy_fence(self.sync_data.draw_commands_reuse_fence, None);
-            self.device
+            self.device_data.device
                 .destroy_fence(self.sync_data.setup_commands_reuse_fence, None);
 
             self.swapchain_data.destroy();
 
-            self.device
+            self.device_data.device
                 .destroy_command_pool(self.command_data.pool, None);
-            self.device.destroy_device(None);
-            self.surface_data.surface_loader.destroy_surface(self.surface_data.surface, None);
+            self.device_data.device.destroy_device(None);
+            self.surface_data
+                .surface_loader
+                .destroy_surface(self.surface_data.surface, None);
             self.debug_utils_loader
                 .destroy_debug_utils_messenger(self.debug_call_back, None);
             self.instance.destroy_instance(None);

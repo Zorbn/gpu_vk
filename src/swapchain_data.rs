@@ -3,13 +3,13 @@ use std::rc;
 use ash::{extensions::khr, vk};
 
 use crate::{
-    command_data::CommandData, physical_device_data::PhysicalDeviceData, surface_data::SurfaceData,
-    sync_data::SyncData, vk_helpers,
+    command_data::CommandData, device_data::DeviceData, surface_data::SurfaceData,
+    sync_data::SyncData,
 };
 
 // TODO: Remove redundant prefixes "swapchain_loader" -> "loader" because it's contained in "swapchain"data
 pub struct SwapchainData {
-    pub device: rc::Rc<ash::Device>,
+    pub device_data: rc::Rc<DeviceData>,
     pub swapchain_loader: khr::Swapchain,
     pub swapchain: vk::SwapchainKHR,
     pub present_images: Vec<vk::Image>,
@@ -21,9 +21,8 @@ pub struct SwapchainData {
 
 impl SwapchainData {
     pub unsafe fn new(
-        device: rc::Rc<ash::Device>,
+        device_data: rc::Rc<DeviceData>,
         surface_data: &SurfaceData,
-        physical_device_data: &PhysicalDeviceData,
         command_data: &CommandData,
         sync_data: &SyncData,
         instance: &ash::Instance,
@@ -31,7 +30,7 @@ impl SwapchainData {
         let surface_capabilities = surface_data
             .surface_loader
             .get_physical_device_surface_capabilities(
-                physical_device_data.pdevice,
+                device_data.pdevice,
                 surface_data.surface,
             )
             .unwrap();
@@ -53,7 +52,7 @@ impl SwapchainData {
         let present_modes = surface_data
             .surface_loader
             .get_physical_device_surface_present_modes(
-                physical_device_data.pdevice,
+                device_data.pdevice,
                 surface_data.surface,
             )
             .unwrap();
@@ -62,7 +61,7 @@ impl SwapchainData {
             .cloned()
             .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
             .unwrap_or(vk::PresentModeKHR::FIFO);
-        let swapchain_loader = khr::Swapchain::new(instance, &device);
+        let swapchain_loader = khr::Swapchain::new(instance, &device_data.device);
 
         let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
             .surface(surface_data.surface)
@@ -105,7 +104,7 @@ impl SwapchainData {
                     })
                     .image(image)
                     .build();
-                device.create_image_view(&create_view_info, None).unwrap()
+                device_data.device.create_image_view(&create_view_info, None).unwrap()
             })
             .collect();
         let depth_image_create_info = vk::ImageCreateInfo::builder()
@@ -120,11 +119,10 @@ impl SwapchainData {
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .build();
 
-        let depth_image = device.create_image(&depth_image_create_info, None).unwrap();
-        let depth_image_memory_req = device.get_image_memory_requirements(depth_image);
-        let depth_image_memory_index = vk_helpers::find_memory_type_index(
+        let depth_image = device_data.device.create_image(&depth_image_create_info, None).unwrap();
+        let depth_image_memory_req = device_data.device.get_image_memory_requirements(depth_image);
+        let depth_image_memory_index = device_data.find_memory_type_index(
             &depth_image_memory_req,
-            &physical_device_data.device_memory_properties,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )
         .expect("Unable to find suitable memory index for depth image.");
@@ -134,23 +132,21 @@ impl SwapchainData {
             .memory_type_index(depth_image_memory_index)
             .build();
 
-        let depth_image_memory = device
+        let depth_image_memory = device_data.device
             .allocate_memory(&depth_image_allocate_info, None)
             .unwrap();
 
-        device
+        device_data.device
             .bind_image_memory(depth_image, depth_image_memory, 0)
             .expect("Unable to bind depth image memory");
 
-        vk_helpers::record_submit_commandbuffer(
-            &device,
+        device_data.record_submit(
             command_data.setup_command_buffer,
             sync_data.setup_commands_reuse_fence,
-            physical_device_data.present_queue,
             &[],
             &[],
             &[],
-            |device: &ash::Device, setup_command_buffer| {
+            |device, setup_command_buffer| {
                 let layout_transition_barriers = vk::ImageMemoryBarrier::builder()
                     .image(depth_image)
                     .dst_access_mask(
@@ -193,12 +189,12 @@ impl SwapchainData {
             .view_type(vk::ImageViewType::TYPE_2D)
             .build();
 
-        let depth_image_view = device
+        let depth_image_view = device_data.device
             .create_image_view(&depth_image_view_info, None)
             .unwrap();
 
         SwapchainData {
-            device: device.clone(),
+            device_data: device_data.clone(),
             swapchain_loader,
             swapchain,
             present_images,
@@ -212,7 +208,6 @@ impl SwapchainData {
     pub unsafe fn recreate(
         &mut self,
         surface_data: &SurfaceData,
-        physical_device_data: &PhysicalDeviceData,
         command_data: &CommandData,
         sync_data: &SyncData,
         instance: &ash::Instance,
@@ -220,9 +215,8 @@ impl SwapchainData {
         self.destroy();
 
         let new_swapchain_data = SwapchainData::new(
-            self.device.clone(),
+            self.device_data.clone(),
             surface_data,
-            physical_device_data,
             command_data,
             sync_data,
             instance,
@@ -238,11 +232,11 @@ impl SwapchainData {
     }
 
     pub unsafe fn destroy(&mut self) {
-        self.device.free_memory(self.depth_image_memory, None);
-        self.device.destroy_image_view(self.depth_image_view, None);
-        self.device.destroy_image(self.depth_image, None);
+        self.device_data.device.free_memory(self.depth_image_memory, None);
+        self.device_data.device.destroy_image_view(self.depth_image_view, None);
+        self.device_data.device.destroy_image(self.depth_image, None);
         for &image_view in self.present_image_views.iter() {
-            self.device.destroy_image_view(image_view, None);
+            self.device_data.device.destroy_image_view(image_view, None);
         }
         self.swapchain_loader
             .destroy_swapchain(self.swapchain, None);
