@@ -784,12 +784,7 @@ fn main() {
 
         let graphic_pipeline = graphics_pipelines[0];
 
-        ExampleBase::render_loop(&mut event_loop, || {
-            let window_size = window.inner_size();
-            if window_size.width == 0 || window_size.height == 0 {
-                return;
-            }
-
+        ExampleBase::render_loop(&window, &mut event_loop, || {
             let (present_index, _) = match base.swapchain_data.swapchain_loader.acquire_next_image(
                 base.swapchain_data.swapchain,
                 std::u64::MAX,
@@ -800,6 +795,7 @@ fn main() {
                 Err(_) => {
                     base.device_data.device.device_wait_idle().unwrap();
                     // TODO: This is a duplicate of the same check at the bottom of the loop:
+                    let window_size = window.inner_size();
                     base.resize(window_size.width, window_size.height);
                     new_framebuffers(&mut framebuffers, &window, &base, renderpass);
                     return;
@@ -901,6 +897,7 @@ fn main() {
                 Ok(_) => {}
                 Err(_) => {
                     base.device_data.device.device_wait_idle().unwrap();
+                    let window_size = window.inner_size();
                     base.resize(window_size.width, window_size.height);
                     new_framebuffers(&mut framebuffers, &window, &base, renderpass);
                 }

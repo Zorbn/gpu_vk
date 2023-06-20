@@ -101,10 +101,8 @@ impl ExampleBase {
         (window, event_loop)
     }
 
-    pub fn render_loop<F: FnMut()>(event_loop: &mut EventLoop<()>, mut f: F) {
+    pub fn render_loop<F: FnMut()>(window: &winit::window::Window, event_loop: &mut EventLoop<()>, mut f: F) {
         event_loop.run_return(|event, _, control_flow| {
-            *control_flow = ControlFlow::Poll;
-
             match event {
                 Event::WindowEvent {
                     event:
@@ -120,7 +118,18 @@ impl ExampleBase {
                         },
                     ..
                 } => *control_flow = ControlFlow::Exit,
-                Event::MainEventsCleared => f(),
+                Event::MainEventsCleared => {
+                    let window_size = window.inner_size();
+
+                    if window_size.width == 0 || window_size.height == 0 {
+                        *control_flow = ControlFlow::Wait;
+                        return;
+                    }
+
+                    *control_flow = ControlFlow::Poll;
+
+                    f()
+                },
                 _ => (),
             }
         });
