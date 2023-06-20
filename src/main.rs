@@ -40,8 +40,8 @@ unsafe fn new_framebuffers(
 
     let window_size = window.inner_size();
 
-    for present_image_view in &base.present_image_views {
-        let framebuffer_attachments = [*present_image_view, base.depth_image_view];
+    for present_image_view in &base.swapchain_data.present_image_views {
+        let framebuffer_attachments = [*present_image_view, base.swapchain_data.depth_image_view];
         let frame_buffer_create_info = vk::FramebufferCreateInfo::builder()
             .render_pass(renderpass)
             .attachments(&framebuffer_attachments)
@@ -71,7 +71,7 @@ fn main() {
 
         let renderpass_attachments = [
             vk::AttachmentDescription {
-                format: base.surface_format.format,
+                format: base.surface_data.surface_format.format,
                 samples: vk::SampleCountFlags::TYPE_1,
                 load_op: vk::AttachmentLoadOp::CLEAR,
                 store_op: vk::AttachmentStoreOp::STORE,
@@ -133,9 +133,9 @@ fn main() {
         };
         let index_buffer = base.device.create_buffer(&index_buffer_info, None).unwrap();
         let index_buffer_memory_req = base.device.get_buffer_memory_requirements(index_buffer);
-        let index_buffer_memory_index = find_memorytype_index(
+        let index_buffer_memory_index = vk_helpers::find_memory_type_index(
             &index_buffer_memory_req,
-            &base.device_memory_properties,
+            &base.physical_device_data.device_memory_properties,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )
         .expect("Unable to find suitable memorytype for the index buffer.");
@@ -199,9 +199,9 @@ fn main() {
         let vertex_input_buffer_memory_req = base
             .device
             .get_buffer_memory_requirements(vertex_input_buffer);
-        let vertex_input_buffer_memory_index = find_memorytype_index(
+        let vertex_input_buffer_memory_index = vk_helpers::find_memory_type_index(
             &vertex_input_buffer_memory_req,
-            &base.device_memory_properties,
+            &base.physical_device_data.device_memory_properties,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )
         .expect("Unable to find suitable memorytype for the vertex buffer.");
@@ -255,9 +255,9 @@ fn main() {
         let uniform_color_buffer_memory_req = base
             .device
             .get_buffer_memory_requirements(uniform_color_buffer);
-        let uniform_color_buffer_memory_index = find_memorytype_index(
+        let uniform_color_buffer_memory_index = vk_helpers::find_memory_type_index(
             &uniform_color_buffer_memory_req,
-            &base.device_memory_properties,
+            &base.physical_device_data.device_memory_properties,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )
         .expect("Unable to find suitable memorytype for the vertex buffer.");
@@ -305,9 +305,9 @@ fn main() {
         };
         let image_buffer = base.device.create_buffer(&image_buffer_info, None).unwrap();
         let image_buffer_memory_req = base.device.get_buffer_memory_requirements(image_buffer);
-        let image_buffer_memory_index = find_memorytype_index(
+        let image_buffer_memory_index = vk_helpers::find_memory_type_index(
             &image_buffer_memory_req,
-            &base.device_memory_properties,
+            &base.physical_device_data.device_memory_properties,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )
         .expect("Unable to find suitable memorytype for the image buffer.");
@@ -358,9 +358,9 @@ fn main() {
             .create_image(&texture_create_info, None)
             .unwrap();
         let texture_memory_req = base.device.get_image_memory_requirements(texture_image);
-        let texture_memory_index = find_memorytype_index(
+        let texture_memory_index = vk_helpers::find_memory_type_index(
             &texture_memory_req,
-            &base.device_memory_properties,
+            &base.physical_device_data.device_memory_properties,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )
         .expect("Unable to find suitable memory index for depth image.");
@@ -378,11 +378,11 @@ fn main() {
             .bind_image_memory(texture_image, texture_memory, 0)
             .expect("Unable to bind depth image memory");
 
-        record_submit_commandbuffer(
+        vk_helpers::record_submit_commandbuffer(
             &base.device,
-            base.setup_command_buffer,
-            base.setup_commands_reuse_fence,
-            base.present_queue,
+            base.command_data.setup_command_buffer,
+            base.sync_data.setup_commands_reuse_fence,
+            base.physical_device_data.present_queue,
             &[],
             &[],
             &[],
@@ -652,13 +652,13 @@ fn main() {
         let mut viewports = [vk::Viewport {
             x: 0.0,
             y: 0.0,
-            width: base.surface_resolution.width as f32,
-            height: base.surface_resolution.height as f32,
+            width: base.surface_data.surface_resolution.width as f32,
+            height: base.surface_data.surface_resolution.height as f32,
             min_depth: 0.0,
             max_depth: 1.0,
         }];
 
-        let mut scissors = [base.surface_resolution.into()];
+        let mut scissors = [base.surface_data.surface_resolution.into()];
         let viewport_state_info = vk::PipelineViewportStateCreateInfo::builder()
             .scissors(&scissors)
             .viewports(&viewports)
@@ -739,17 +739,17 @@ fn main() {
                 return;
             }
 
-            let (present_index, _) = match base.swapchain_loader.acquire_next_image(
-                base.swapchain,
+            let (present_index, _) = match base.swapchain_data.swapchain_loader.acquire_next_image(
+                base.swapchain_data.swapchain,
                 std::u64::MAX,
-                base.present_complete_semaphore,
+                base.sync_data.present_complete_semaphore,
                 vk::Fence::null(),
             ) {
                 Ok(values) => values,
                 Err(_) => {
                     base.device.device_wait_idle().unwrap();
                     // TODO: This is a duplicate of the same check at the bottom of the loop:
-                    base.recreate_swapchain(window_size.width, window_size.height);
+                    base.resize(window_size.width, window_size.height);
                     new_framebuffers(&mut framebuffers, &window, &base, renderpass);
                     return;
                 }
@@ -769,27 +769,26 @@ fn main() {
                 },
             ];
 
-            // TODO:
-            viewports[0].width = base.surface_resolution.width as f32;
-            viewports[0].height = base.surface_resolution.height as f32;
-            scissors[0].extent.width = base.surface_resolution.width;
-            scissors[0].extent.height = base.surface_resolution.height;
+            viewports[0].width = base.surface_data.surface_resolution.width as f32;
+            viewports[0].height = base.surface_data.surface_resolution.height as f32;
+            scissors[0].extent.width = base.surface_data.surface_resolution.width;
+            scissors[0].extent.height = base.surface_data.surface_resolution.height;
 
             let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
                 .render_pass(renderpass)
                 .framebuffer(framebuffers[present_index as usize])
-                .render_area(base.surface_resolution.into())
+                .render_area(base.surface_data.surface_resolution.into())
                 .clear_values(&clear_values)
                 .build();
 
-            record_submit_commandbuffer(
+            vk_helpers::record_submit_commandbuffer(
                 &base.device,
-                base.draw_command_buffer,
-                base.draw_commands_reuse_fence,
-                base.present_queue,
+                base.command_data.draw_command_buffer,
+                base.sync_data.draw_commands_reuse_fence,
+                base.physical_device_data.present_queue,
                 &[vk::PipelineStageFlags::BOTTOM_OF_PIPE],
-                &[base.present_complete_semaphore],
-                &[base.rendering_complete_semaphore],
+                &[base.sync_data.present_complete_semaphore],
+                &[base.sync_data.rendering_complete_semaphore],
                 |device, draw_command_buffer| {
                     device.cmd_begin_render_pass(
                         draw_command_buffer,
@@ -838,23 +837,24 @@ fn main() {
             );
             let present_info = vk::PresentInfoKHR {
                 wait_semaphore_count: 1,
-                p_wait_semaphores: &base.rendering_complete_semaphore,
+                p_wait_semaphores: &base.sync_data.rendering_complete_semaphore,
                 swapchain_count: 1,
-                p_swapchains: &base.swapchain,
+                p_swapchains: &base.swapchain_data.swapchain,
                 p_image_indices: &present_index,
                 ..Default::default()
             };
 
             match base
+                .swapchain_data
                 .swapchain_loader
-                .queue_present(base.present_queue, &present_info)
+                .queue_present(base.physical_device_data.present_queue, &present_info)
             {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(_) => {
                     base.device.device_wait_idle().unwrap();
-                    base.recreate_swapchain(window_size.width, window_size.height);
+                    base.resize(window_size.width, window_size.height);
                     new_framebuffers(&mut framebuffers, &window, &base, renderpass);
-                },
+                }
             }
         });
 
