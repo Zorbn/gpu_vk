@@ -25,6 +25,7 @@ pub struct Vector3 {
     pub _pad: f32,
 }
 
+// TODO: Make this part of the swapchain:
 unsafe fn new_framebuffers(
     framebuffers: &mut Vec<vk::Framebuffer>,
     window: &winit::window::Window,
@@ -65,16 +66,21 @@ fn main() {
     unsafe {
         let mut event_loop = EventLoop::new();
         let window = WindowBuilder::new()
-            .with_title("Ash - Example")
+            .with_title("Ash")
             .with_inner_size(winit::dpi::LogicalSize::new(f64::from(640), f64::from(480)))
             .build(&event_loop)
             .unwrap();
 
         let mut base = ExampleBase::new(&window);
 
+        let surface_format = base
+            .surface_data
+            .surface_format
+            .expect("Surface format was uninitialized!");
+
         let renderpass_attachments = [
             vk::AttachmentDescription {
-                format: base.surface_data.surface_format.format,
+                format: surface_format.format,
                 samples: vk::SampleCountFlags::TYPE_1,
                 load_op: vk::AttachmentLoadOp::CLEAR,
                 store_op: vk::AttachmentStoreOp::STORE,
@@ -144,11 +150,13 @@ fn main() {
             .device_data
             .device
             .get_buffer_memory_requirements(index_buffer);
-        let index_buffer_memory_index = base.device_data.find_memory_type_index(
-            &index_buffer_memory_req,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )
-        .expect("Unable to find suitable memorytype for the index buffer.");
+        let index_buffer_memory_index = base
+            .device_data
+            .find_memory_type_index(
+                &index_buffer_memory_req,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            )
+            .expect("Unable to find suitable memorytype for the index buffer.");
         let index_allocate_info = vk::MemoryAllocateInfo {
             allocation_size: index_buffer_memory_req.size,
             memory_type_index: index_buffer_memory_index,
@@ -214,11 +222,13 @@ fn main() {
             .device_data
             .device
             .get_buffer_memory_requirements(vertex_input_buffer);
-        let vertex_input_buffer_memory_index = base.device_data.find_memory_type_index(
-            &vertex_input_buffer_memory_req,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )
-        .expect("Unable to find suitable memorytype for the vertex buffer.");
+        let vertex_input_buffer_memory_index = base
+            .device_data
+            .find_memory_type_index(
+                &vertex_input_buffer_memory_req,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            )
+            .expect("Unable to find suitable memorytype for the vertex buffer.");
 
         let vertex_buffer_allocate_info = vk::MemoryAllocateInfo {
             allocation_size: vertex_input_buffer_memory_req.size,
@@ -276,11 +286,13 @@ fn main() {
             .device_data
             .device
             .get_buffer_memory_requirements(uniform_color_buffer);
-        let uniform_color_buffer_memory_index = base.device_data.find_memory_type_index(
-            &uniform_color_buffer_memory_req,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )
-        .expect("Unable to find suitable memorytype for the vertex buffer.");
+        let uniform_color_buffer_memory_index = base
+            .device_data
+            .find_memory_type_index(
+                &uniform_color_buffer_memory_req,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            )
+            .expect("Unable to find suitable memorytype for the vertex buffer.");
 
         let uniform_color_buffer_allocate_info = vk::MemoryAllocateInfo {
             allocation_size: uniform_color_buffer_memory_req.size,
@@ -337,11 +349,13 @@ fn main() {
             .device_data
             .device
             .get_buffer_memory_requirements(image_buffer);
-        let image_buffer_memory_index = base.device_data.find_memory_type_index(
-            &image_buffer_memory_req,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )
-        .expect("Unable to find suitable memorytype for the image buffer.");
+        let image_buffer_memory_index = base
+            .device_data
+            .find_memory_type_index(
+                &image_buffer_memory_req,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            )
+            .expect("Unable to find suitable memorytype for the image buffer.");
 
         let image_buffer_allocate_info = vk::MemoryAllocateInfo {
             allocation_size: image_buffer_memory_req.size,
@@ -396,11 +410,10 @@ fn main() {
             .device_data
             .device
             .get_image_memory_requirements(texture_image);
-        let texture_memory_index = base.device_data.find_memory_type_index(
-            &texture_memory_req,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
-        )
-        .expect("Unable to find suitable memory index for depth image.");
+        let texture_memory_index = base
+            .device_data
+            .find_memory_type_index(&texture_memory_req, vk::MemoryPropertyFlags::DEVICE_LOCAL)
+            .expect("Unable to find suitable memory index for depth image.");
 
         let texture_allocate_info = vk::MemoryAllocateInfo {
             allocation_size: texture_memory_req.size,
