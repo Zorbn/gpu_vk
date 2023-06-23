@@ -29,7 +29,7 @@ pub struct Vector3 {
 unsafe fn new_framebuffers(
     framebuffers: &mut Vec<vk::Framebuffer>,
     window: &winit::window::Window,
-    base: &ExampleBase,
+    base: &VkBase,
     renderpass: vk::RenderPass,
 ) {
     // TODO: This is duplicate code:
@@ -71,7 +71,7 @@ fn main() {
             .build(&event_loop)
             .unwrap();
 
-        let mut base = ExampleBase::new(&window);
+        let mut base = VkBase::new(&window);
 
         let surface_format = base
             .surface_data
@@ -797,7 +797,7 @@ fn main() {
 
         let graphic_pipeline = graphics_pipelines[0];
 
-        ExampleBase::render_loop(&window, &mut event_loop, || {
+        VkBase::render_loop(&window, &mut event_loop, || {
             let (present_index, _) = match base.swapchain_data.swapchain_loader.acquire_next_image(
                 base.swapchain_data.swapchain,
                 std::u64::MAX,

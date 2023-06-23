@@ -25,12 +25,12 @@ use ash::vk::{
 
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::EventLoop,
     platform::run_return::EventLoopExtRunReturn,
     window::WindowBuilder,
 };
 
-// Simple offset_of macro akin to C++ offsetof
+// Simple offset_of macro akin to C++ offsetof.
 #[macro_export]
 macro_rules! offset_of {
     ($base:path, $field:ident) => {{
@@ -72,7 +72,7 @@ unsafe extern "system" fn vulkan_debug_callback(
 
 // TODO: Multiple in-flight frames are currently unsupported:
 // https://vulkan-tutorial.com/Drawing_a_triangle/Drawing/Frames_in_flight
-pub struct ExampleBase {
+pub struct VkBase {
     pub debug_utils_loader: ext::DebugUtils,
     pub debug_call_back: vk::DebugUtilsMessengerEXT,
 
@@ -84,7 +84,7 @@ pub struct ExampleBase {
     pub instance_data: InstanceData,
 }
 
-impl ExampleBase {
+impl VkBase {
     pub fn create_window(
         window_width: u32,
         window_height: u32,
@@ -121,18 +121,22 @@ impl ExampleBase {
                         ..
                     },
                 ..
-            } => *control_flow = ControlFlow::Exit,
-            Event::MainEventsCleared => {
+            } => control_flow.set_exit(),
+            Event::MainEventsCleared
+            | Event::WindowEvent {
+                event: WindowEvent::Resized(..),
+                ..
+            } => {
                 let window_size = window.inner_size();
 
                 if window_size.width == 0 || window_size.height == 0 {
-                    *control_flow = ControlFlow::Wait;
+                    control_flow.set_wait();
                     return;
                 }
 
-                *control_flow = ControlFlow::Poll;
+                control_flow.set_poll();
 
-                f()
+                f();
             }
             _ => (),
         });
@@ -168,12 +172,13 @@ impl ExampleBase {
                 .pfn_user_callback(Some(vulkan_debug_callback))
                 .build();
 
-            let debug_utils_loader = ext::DebugUtils::new(&instance_data.entry, &instance_data.instance);
+            let debug_utils_loader =
+                ext::DebugUtils::new(&instance_data.entry, &instance_data.instance);
             let debug_call_back = debug_utils_loader
                 .create_debug_utils_messenger(&debug_info, None)
                 .unwrap();
 
-            ExampleBase {
+            VkBase {
                 instance_data,
                 device_data,
                 debug_call_back,
@@ -203,7 +208,7 @@ impl ExampleBase {
     }
 }
 
-impl Drop for ExampleBase {
+impl Drop for VkBase {
     fn drop(&mut self) {
         unsafe {
             self.device_data.device.device_wait_idle().unwrap();
