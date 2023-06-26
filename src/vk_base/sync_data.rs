@@ -2,14 +2,12 @@ use std::rc;
 
 use ash::vk;
 
-use crate::device_data::DeviceData;
+use super::device_data::DeviceData;
 
 pub struct SyncData {
-    pub device_data: rc::Rc<DeviceData>,
-
+    device_data: rc::Rc<DeviceData>,
     pub present_complete_semaphore: vk::Semaphore,
     pub rendering_complete_semaphore: vk::Semaphore,
-
     pub draw_commands_reuse_fence: vk::Fence,
     pub setup_commands_reuse_fence: vk::Fence,
 }
@@ -34,11 +32,11 @@ impl SyncData {
         let draw_commands_reuse_fence = device_data
             .device
             .create_fence(&fence_create_info, None)
-            .expect("Create fence failed.");
+            .expect("Failed to create fence");
         let setup_commands_reuse_fence = device_data
             .device
             .create_fence(&fence_create_info, None)
-            .expect("Create fence failed.");
+            .expect("Failed to create fence");
 
         Self {
             device_data,

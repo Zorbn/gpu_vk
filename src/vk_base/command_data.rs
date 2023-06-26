@@ -2,13 +2,13 @@ use std::rc;
 
 use ash::vk;
 
-use crate::device_data::DeviceData;
+use super::device_data::DeviceData;
 
 pub struct CommandData {
-    pub device_data: rc::Rc<DeviceData>,
+    device_data: rc::Rc<DeviceData>,
     pub pool: vk::CommandPool,
-    pub draw_command_buffer: vk::CommandBuffer,
-    pub setup_command_buffer: vk::CommandBuffer,
+    pub draw_buffer: vk::CommandBuffer,
+    pub setup_buffer: vk::CommandBuffer,
 }
 
 impl CommandData {
@@ -35,8 +35,8 @@ impl CommandData {
         Self {
             device_data,
             pool,
-            draw_command_buffer,
-            setup_command_buffer,
+            draw_buffer: draw_command_buffer,
+            setup_buffer: setup_command_buffer,
         }
     }
 }

@@ -1,14 +1,14 @@
 use ash::{extensions::khr, vk};
 
-use crate::{device_data::DeviceData, instance_data::InstanceData};
+use super::{device_data::DeviceData, instance_data::InstanceData};
 
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 pub struct SurfaceData {
-    pub surface_loader: khr::Surface,
+    pub loader: khr::Surface,
     pub surface: vk::SurfaceKHR,
-    pub surface_format: Option<vk::SurfaceFormatKHR>,
-    pub surface_resolution: vk::Extent2D,
+    pub format: Option<vk::SurfaceFormatKHR>,
+    pub resolution: vk::Extent2D,
 }
 
 impl SurfaceData {
@@ -27,10 +27,10 @@ impl SurfaceData {
         let window_size = window.inner_size();
 
         Self {
-            surface_loader,
+            loader: surface_loader,
             surface,
-            surface_format: None,
-            surface_resolution: vk::Extent2D {
+            format: None,
+            resolution: vk::Extent2D {
                 width: window_size.width,
                 height: window_size.height,
             },
@@ -38,18 +38,18 @@ impl SurfaceData {
     }
 
     pub unsafe fn update_surface_format(&mut self, device_data: &DeviceData) {
-        let surface_format = self.surface_loader
-            .get_physical_device_surface_formats(device_data.pdevice, self.surface)
+        let surface_format = self.loader
+            .get_physical_device_surface_formats(device_data.physical_device, self.surface)
             .unwrap()[0];
 
-        self.surface_format = Some(surface_format);
+        self.format = Some(surface_format);
     }
 }
 
 impl Drop for SurfaceData {
     fn drop(&mut self) {
         unsafe {
-            self.surface_loader.destroy_surface(self.surface, None);
+            self.loader.destroy_surface(self.surface, None);
         }
     }
 }

@@ -2,15 +2,14 @@ use std::rc;
 
 use ash::{extensions::khr, vk};
 
-use crate::{
+use super::{
     command_data::CommandData, device_data::DeviceData, instance_data::InstanceData,
     surface_data::SurfaceData, sync_data::SyncData,
 };
 
-// TODO: Remove redundant prefixes "swapchain_loader" -> "loader" because it's contained in "swapchain"data
 pub struct SwapchainData {
-    pub device_data: rc::Rc<DeviceData>,
-    pub swapchain_loader: khr::Swapchain,
+    device_data: rc::Rc<DeviceData>,
+    pub loader: khr::Swapchain,
     pub swapchain: vk::SwapchainKHR,
     pub present_images: Vec<vk::Image>,
     pub present_image_views: Vec<vk::ImageView>,
@@ -28,8 +27,8 @@ impl SwapchainData {
         sync_data: &SyncData,
     ) -> Self {
         let surface_capabilities = surface_data
-            .surface_loader
-            .get_physical_device_surface_capabilities(device_data.pdevice, surface_data.surface)
+            .loader
+            .get_physical_device_surface_capabilities(device_data.physical_device, surface_data.surface)
             .unwrap();
         let mut desired_image_count = surface_capabilities.min_image_count + 1;
         if surface_capabilities.max_image_count > 0
@@ -47,8 +46,8 @@ impl SwapchainData {
             surface_capabilities.current_transform
         };
         let present_modes = surface_data
-            .surface_loader
-            .get_physical_device_surface_present_modes(device_data.pdevice, surface_data.surface)
+            .loader
+            .get_physical_device_surface_present_modes(device_data.physical_device, surface_data.surface)
             .unwrap();
         let present_mode = present_modes
             .iter()
@@ -57,14 +56,14 @@ impl SwapchainData {
             .unwrap_or(vk::PresentModeKHR::FIFO);
         let swapchain_loader = khr::Swapchain::new(&instance_data.instance, &device_data.device);
 
-        let surface_format = surface_data.surface_format.expect("Initializing swapchain data requires a surface format, but surface data doesn't have it!");
+        let surface_format = surface_data.format.expect("Initializing swapchain data requires a surface format, but surface data doesn't have it");
 
         let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
             .surface(surface_data.surface)
             .min_image_count(desired_image_count)
             .image_color_space(surface_format.color_space)
             .image_format(surface_format.format)
-            .image_extent(surface_data.surface_resolution)
+            .image_extent(surface_data.resolution)
             .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
             .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
             .pre_transform(pre_transform)
@@ -109,7 +108,7 @@ impl SwapchainData {
         let depth_image_create_info = vk::ImageCreateInfo::builder()
             .image_type(vk::ImageType::TYPE_2D)
             .format(vk::Format::D16_UNORM)
-            .extent(surface_data.surface_resolution.into())
+            .extent(surface_data.resolution.into())
             .mip_levels(1)
             .array_layers(1)
             .samples(vk::SampleCountFlags::TYPE_1)
@@ -130,7 +129,7 @@ impl SwapchainData {
                 &depth_image_memory_req,
                 vk::MemoryPropertyFlags::DEVICE_LOCAL,
             )
-            .expect("Unable to find suitable memory index for depth image.");
+            .expect("Unable to find suitable memory index for depth image");
 
         let depth_image_allocate_info = vk::MemoryAllocateInfo::builder()
             .allocation_size(depth_image_memory_req.size)
@@ -148,7 +147,7 @@ impl SwapchainData {
             .expect("Unable to bind depth image memory");
 
         device_data.record_submit(
-            command_data.setup_command_buffer,
+            command_data.setup_buffer,
             sync_data.setup_commands_reuse_fence,
             &[],
             &[],
@@ -203,7 +202,7 @@ impl SwapchainData {
 
         Self {
             device_data,
-            swapchain_loader,
+            loader: swapchain_loader,
             swapchain,
             present_images,
             present_image_views,
@@ -230,7 +229,7 @@ impl SwapchainData {
             sync_data,
         );
 
-        self.swapchain_loader = new_swapchain_data.swapchain_loader;
+        self.loader = new_swapchain_data.loader;
         self.swapchain = new_swapchain_data.swapchain;
         self.present_images = new_swapchain_data.present_images;
         self.present_image_views = new_swapchain_data.present_image_views;
@@ -252,7 +251,7 @@ impl SwapchainData {
         for &image_view in self.present_image_views.iter() {
             self.device_data.device.destroy_image_view(image_view, None);
         }
-        self.swapchain_loader
+        self.loader
             .destroy_swapchain(self.swapchain, None);
     }
 }

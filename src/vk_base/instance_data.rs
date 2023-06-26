@@ -59,7 +59,7 @@ impl InstanceData {
 
         let instance = entry
             .create_instance(&create_info, None)
-            .expect("Instance creation error");
+            .expect("Failed to create instance");
 
         Self { instance, entry }
     }

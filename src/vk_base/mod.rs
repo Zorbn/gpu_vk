@@ -27,7 +27,6 @@ use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::EventLoop,
     platform::run_return::EventLoopExtRunReturn,
-    window::WindowBuilder,
 };
 
 // Simple offset_of macro akin to C++ offsetof.
@@ -85,23 +84,6 @@ pub struct VkBase {
 }
 
 impl VkBase {
-    pub fn create_window(
-        window_width: u32,
-        window_height: u32,
-    ) -> (winit::window::Window, EventLoop<()>) {
-        let event_loop = EventLoop::new();
-        let window = WindowBuilder::new()
-            .with_title("Ash - Example")
-            .with_inner_size(winit::dpi::LogicalSize::new(
-                f64::from(window_width),
-                f64::from(window_height),
-            ))
-            .build(&event_loop)
-            .unwrap();
-
-        (window, event_loop)
-    }
-
     pub fn render_loop<F: FnMut()>(
         window: &winit::window::Window,
         event_loop: &mut EventLoop<()>,
@@ -192,10 +174,9 @@ impl VkBase {
     }
 
     // TODO: Unsafe?
-    // TODO: Make resize also handle framebuffers, device idling, and size checking (ie: returns true when successful, or maybe has a loop inside the function itself).
     pub fn resize(&mut self, window_width: u32, window_height: u32) {
-        self.surface_data.surface_resolution.width = window_width;
-        self.surface_data.surface_resolution.height = window_height;
+        self.surface_data.resolution.width = window_width;
+        self.surface_data.resolution.height = window_height;
 
         unsafe {
             self.swapchain_data.recreate(
