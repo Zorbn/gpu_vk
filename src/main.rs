@@ -1,5 +1,8 @@
 mod graphics;
 
 fn main() {
-    unsafe { graphics::run(); }
+    unsafe {
+        let mut graphics = graphics::Graphics::new("GPU VK");
+        graphics.run();
+    }
 }
