@@ -1,3 +1,4 @@
+mod sprite_batch;
 mod vk_base;
 mod vk_resources;
 
@@ -5,7 +6,6 @@ use std::default::Default;
 use std::ffi::CStr;
 use std::io::Cursor;
 use std::mem::{self, align_of};
-use std::os::raw::c_void;
 use std::rc;
 
 use ash::util::*;
@@ -17,12 +17,6 @@ use winit::event_loop::EventLoop;
 use winit::window::WindowBuilder;
 
 #[derive(Clone, Debug, Copy)]
-struct Vertex {
-    pos: [f32; 4],
-    uv: [f32; 2],
-}
-
-#[derive(Clone, Debug, Copy)]
 pub struct Vector3 {
     pub x: f32,
     pub y: f32,
@@ -32,12 +26,12 @@ pub struct Vector3 {
 
 pub struct Graphics {
     resources: Resources,
+    sprite_batch: sprite_batch::SpriteBatch,
 
     base: vk_base::VkBase,
 
     window: winit::window::Window,
     event_loop: EventLoop<()>,
-
 }
 
 struct Resources {
@@ -49,13 +43,6 @@ struct Resources {
 
     pipelines: Vec<vk::Pipeline>,
     pipeline_layout: vk::PipelineLayout,
-
-    vertex_input_buffer: vk::Buffer,
-    vertex_input_buffer_memory: vk::DeviceMemory,
-
-    index_buffer: vk::Buffer,
-    index_buffer_data: [u32; 6],
-    index_buffer_memory: vk::DeviceMemory,
 
     vertex_shader_module: vk::ShaderModule,
     fragment_shader_module: vk::ShaderModule,
@@ -90,137 +77,6 @@ impl Graphics {
             &base.swapchain_data,
             &window,
         );
-
-        let index_buffer_data = [0u32, 1, 2, 2, 3, 0];
-        let index_buffer_info = vk::BufferCreateInfo {
-            size: std::mem::size_of_val(&index_buffer_data) as u64,
-            usage: vk::BufferUsageFlags::INDEX_BUFFER,
-            sharing_mode: vk::SharingMode::EXCLUSIVE,
-            ..Default::default()
-        };
-        let index_buffer = base
-            .device_data
-            .device
-            .create_buffer(&index_buffer_info, None)
-            .unwrap();
-        let index_buffer_memory_req = base
-            .device_data
-            .device
-            .get_buffer_memory_requirements(index_buffer);
-        let index_buffer_memory_index = base
-            .device_data
-            .find_memory_type_index(
-                &index_buffer_memory_req,
-                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-            )
-            .expect("Unable to find suitable memory type for the index buffer");
-        let index_allocate_info = vk::MemoryAllocateInfo {
-            allocation_size: index_buffer_memory_req.size,
-            memory_type_index: index_buffer_memory_index,
-            ..Default::default()
-        };
-        let index_buffer_memory = base
-            .device_data
-            .device
-            .allocate_memory(&index_allocate_info, None)
-            .unwrap();
-        let index_ptr: *mut c_void = base
-            .device_data
-            .device
-            .map_memory(
-                index_buffer_memory,
-                0,
-                index_buffer_memory_req.size,
-                vk::MemoryMapFlags::empty(),
-            )
-            .unwrap();
-        let mut index_slice = Align::new(
-            index_ptr,
-            align_of::<u32>() as u64,
-            index_buffer_memory_req.size,
-        );
-        index_slice.copy_from_slice(&index_buffer_data);
-        base.device_data.device.unmap_memory(index_buffer_memory);
-        base.device_data
-            .device
-            .bind_buffer_memory(index_buffer, index_buffer_memory, 0)
-            .unwrap();
-
-        let vertices = [
-            Vertex {
-                pos: [-1.0, -1.0, 0.0, 1.0],
-                uv: [0.0, 0.0],
-            },
-            Vertex {
-                pos: [-1.0, 1.0, 0.0, 1.0],
-                uv: [0.0, 1.0],
-            },
-            Vertex {
-                pos: [1.0, 1.0, 0.0, 1.0],
-                uv: [1.0, 1.0],
-            },
-            Vertex {
-                pos: [1.0, -1.0, 0.0, 1.0],
-                uv: [1.0, 0.0],
-            },
-        ];
-        let vertex_input_buffer_info = vk::BufferCreateInfo {
-            size: std::mem::size_of_val(&vertices) as u64,
-            usage: vk::BufferUsageFlags::VERTEX_BUFFER,
-            sharing_mode: vk::SharingMode::EXCLUSIVE,
-            ..Default::default()
-        };
-        let vertex_input_buffer = base
-            .device_data
-            .device
-            .create_buffer(&vertex_input_buffer_info, None)
-            .unwrap();
-        let vertex_input_buffer_memory_req = base
-            .device_data
-            .device
-            .get_buffer_memory_requirements(vertex_input_buffer);
-        let vertex_input_buffer_memory_index = base
-            .device_data
-            .find_memory_type_index(
-                &vertex_input_buffer_memory_req,
-                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-            )
-            .expect("Unable to find suitable memory type for the vertex buffer");
-
-        let vertex_buffer_allocate_info = vk::MemoryAllocateInfo {
-            allocation_size: vertex_input_buffer_memory_req.size,
-            memory_type_index: vertex_input_buffer_memory_index,
-            ..Default::default()
-        };
-        let vertex_input_buffer_memory = base
-            .device_data
-            .device
-            .allocate_memory(&vertex_buffer_allocate_info, None)
-            .unwrap();
-
-        let vert_ptr = base
-            .device_data
-            .device
-            .map_memory(
-                vertex_input_buffer_memory,
-                0,
-                vertex_input_buffer_memory_req.size,
-                vk::MemoryMapFlags::empty(),
-            )
-            .unwrap();
-        let mut slice = Align::new(
-            vert_ptr,
-            align_of::<Vertex>() as u64,
-            vertex_input_buffer_memory_req.size,
-        );
-        slice.copy_from_slice(&vertices);
-        base.device_data
-            .device
-            .unmap_memory(vertex_input_buffer_memory);
-        base.device_data
-            .device
-            .bind_buffer_memory(vertex_input_buffer, vertex_input_buffer_memory, 0)
-            .unwrap();
 
         let uniform_color_buffer_data = Vector3 {
             x: 1.0,
@@ -373,8 +229,8 @@ impl Graphics {
             .device
             .update_descriptor_sets(&write_descriptor_sets, &[]);
 
-        let mut vertex_spv_file = Cursor::new(&include_bytes!("../../shader/texture/vert.spv")[..]);
-        let mut frag_spv_file = Cursor::new(&include_bytes!("../../shader/texture/frag.spv")[..]);
+        let mut vertex_spv_file = Cursor::new(&include_bytes!("../../shader/texture.vert.spv")[..]);
+        let mut frag_spv_file = Cursor::new(&include_bytes!("../../shader/texture.frag.spv")[..]);
 
         let vertex_code =
             read_spv(&mut vertex_spv_file).expect("Failed to read vertex shader spv file");
@@ -425,34 +281,6 @@ impl Graphics {
                 ..Default::default()
             },
         ];
-        let vertex_input_binding_descriptions = [vk::VertexInputBindingDescription {
-            binding: 0,
-            stride: mem::size_of::<Vertex>() as u32,
-            input_rate: vk::VertexInputRate::VERTEX,
-        }];
-        let vertex_input_attribute_descriptions = [
-            vk::VertexInputAttributeDescription {
-                location: 0,
-                binding: 0,
-                format: vk::Format::R32G32B32A32_SFLOAT,
-                offset: crate::offset_of!(Vertex, pos) as u32,
-            },
-            vk::VertexInputAttributeDescription {
-                location: 1,
-                binding: 0,
-                format: vk::Format::R32G32_SFLOAT,
-                offset: crate::offset_of!(Vertex, uv) as u32,
-            },
-        ];
-        let vertex_input_state_info = vk::PipelineVertexInputStateCreateInfo::builder()
-            .vertex_attribute_descriptions(&vertex_input_attribute_descriptions)
-            .vertex_binding_descriptions(&vertex_input_binding_descriptions)
-            .build();
-
-        let vertex_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo {
-            topology: vk::PrimitiveTopology::TRIANGLE_LIST,
-            ..Default::default()
-        };
 
         let viewports = [vk::Viewport {
             x: 0.0,
@@ -517,6 +345,18 @@ impl Graphics {
             .dynamic_states(&dynamic_state)
             .build();
 
+        let (vertex_input_binding_descriptions, vertex_input_attribute_descriptions) =
+            sprite_batch::Vertex::get_info();
+        let vertex_input_state_info = vk::PipelineVertexInputStateCreateInfo::builder()
+            .vertex_attribute_descriptions(&vertex_input_attribute_descriptions)
+            .vertex_binding_descriptions(&vertex_input_binding_descriptions)
+            .build();
+
+        let vertex_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo {
+            topology: vk::PrimitiveTopology::TRIANGLE_LIST,
+            ..Default::default()
+        };
+
         let graphic_pipeline_infos = vk::GraphicsPipelineCreateInfo::builder()
             .stages(&shader_stage_create_infos)
             .vertex_input_state(&vertex_input_state_info)
@@ -537,6 +377,22 @@ impl Graphics {
             .create_graphics_pipelines(vk::PipelineCache::null(), &[graphic_pipeline_infos], None)
             .unwrap();
 
+        let mut sprite_batch = sprite_batch::SpriteBatch::new(base.device_data.clone());
+        sprite_batch.batch(&[
+            sprite_batch::Sprite {
+                x: 0.0,
+                y: 0.0,
+                width: 0.5,
+                height: 0.5,
+            },
+            sprite_batch::Sprite {
+                x: 0.1,
+                y: 0.1,
+                width: 0.5,
+                height: 0.5,
+            },
+        ]);
+
         Self {
             resources: Resources {
                 device_data: base.device_data.clone(),
@@ -547,13 +403,6 @@ impl Graphics {
 
                 pipelines,
                 pipeline_layout,
-
-                vertex_input_buffer,
-                vertex_input_buffer_memory,
-
-                index_buffer,
-                index_buffer_data,
-                index_buffer_memory,
 
                 vertex_shader_module,
                 fragment_shader_module,
@@ -568,6 +417,8 @@ impl Graphics {
                 texture,
             },
 
+            sprite_batch,
+
             base,
 
             window,
@@ -577,10 +428,10 @@ impl Graphics {
 
     pub unsafe fn run(&mut self) {
         let Self {
-             ref mut base,
-             ref mut window,
-             ref mut resources,
-             ..
+            ref mut base,
+            ref mut window,
+            ref mut resources,
+            ..
         } = self;
 
         VkBase::render_loop(window, &mut self.event_loop, || {
@@ -592,6 +443,7 @@ impl Graphics {
             ) {
                 Ok(values) => values,
                 Err(_) => {
+                    // TODO: Duplicate code.
                     base.device_data.device.device_wait_idle().unwrap();
                     let window_size = window.inner_size();
                     base.resize(window_size.width, window_size.height);
@@ -625,16 +477,16 @@ impl Graphics {
                 &[vk::PipelineStageFlags::BOTTOM_OF_PIPE],
                 &[base.sync_data.present_complete_semaphore],
                 &[base.sync_data.rendering_complete_semaphore],
-                |device, draw_command_buffer| {
+                |device, command_buffer| {
                     resources.render_pass.begin(
                         device,
-                        draw_command_buffer,
+                        command_buffer,
                         &base.surface_data,
                         present_index,
                         &clear_values,
                     );
                     device.cmd_bind_descriptor_sets(
-                        draw_command_buffer,
+                        command_buffer,
                         vk::PipelineBindPoint::GRAPHICS,
                         resources.pipeline_layout,
                         0,
@@ -642,33 +494,14 @@ impl Graphics {
                         &[],
                     );
                     device.cmd_bind_pipeline(
-                        draw_command_buffer,
+                        command_buffer,
                         vk::PipelineBindPoint::GRAPHICS,
                         resources.pipelines[0],
                     );
-                    device.cmd_set_viewport(draw_command_buffer, 0, &resources.viewports);
-                    device.cmd_set_scissor(draw_command_buffer, 0, &resources.scissors);
-                    device.cmd_bind_vertex_buffers(
-                        draw_command_buffer,
-                        0,
-                        &[resources.vertex_input_buffer],
-                        &[0],
-                    );
-                    device.cmd_bind_index_buffer(
-                        draw_command_buffer,
-                        resources.index_buffer,
-                        0,
-                        vk::IndexType::UINT32,
-                    );
-                    device.cmd_draw_indexed(
-                        draw_command_buffer,
-                        resources.index_buffer_data.len() as u32,
-                        1,
-                        0,
-                        0,
-                        1,
-                    );
-                    resources.render_pass.end(device, draw_command_buffer)
+                    device.cmd_set_viewport(command_buffer, 0, &resources.viewports);
+                    device.cmd_set_scissor(command_buffer, 0, &resources.scissors);
+                    self.sprite_batch.draw(device, command_buffer);
+                    resources.render_pass.end(device, command_buffer)
                 },
             );
             let present_info = vk::PresentInfoKHR {
@@ -690,9 +523,7 @@ impl Graphics {
                     base.device_data.device.device_wait_idle().unwrap();
                     let window_size = window.inner_size();
                     base.resize(window_size.width, window_size.height);
-                    resources
-                        .render_pass
-                        .resize(window, &base.swapchain_data);
+                    resources.render_pass.resize(window, &base.swapchain_data);
                 }
             }
         });
@@ -718,22 +549,10 @@ impl Drop for Resources {
                 .destroy_shader_module(self.fragment_shader_module, None);
             self.device_data
                 .device
-                .free_memory(self.index_buffer_memory, None);
-            self.device_data
-                .device
-                .destroy_buffer(self.index_buffer, None);
-            self.device_data
-                .device
                 .free_memory(self.uniform_color_buffer_memory, None);
             self.device_data
                 .device
                 .destroy_buffer(self.uniform_color_buffer, None);
-            self.device_data
-                .device
-                .free_memory(self.vertex_input_buffer_memory, None);
-            self.device_data
-                .device
-                .destroy_buffer(self.vertex_input_buffer, None);
             for &descriptor_set_layout in self.descriptor_set_layouts.iter() {
                 self.device_data
                     .device

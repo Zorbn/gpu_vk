@@ -10,9 +10,14 @@ layout (binding = 0) uniform UBO{
 
 
 layout (location = 0) in vec2 o_uv;
-layout (location = 0) out vec4 uFragColor;
+layout (location = 0) out vec4 u_frag_color;
 
 void main() {
     vec4 color = texture(samplerColor, o_uv);
-    uFragColor = color;
+
+    if (color.a < 1.0) {
+        discard;
+    }
+
+    u_frag_color = color;
 }

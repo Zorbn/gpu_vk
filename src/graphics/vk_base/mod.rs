@@ -69,7 +69,7 @@ unsafe extern "system" fn vulkan_debug_callback(
     vk::FALSE
 }
 
-// TODO: Multiple in-flight frames are currently unsupported:
+// NOTE: Multiple in-flight frames are currently unsupported:
 // https://vulkan-tutorial.com/Drawing_a_triangle/Drawing/Frames_in_flight
 pub struct VkBase {
     pub debug_utils_loader: ext::DebugUtils,
