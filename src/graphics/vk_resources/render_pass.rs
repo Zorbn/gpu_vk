@@ -1,6 +1,6 @@
 use std::rc;
 
-use crate::vk_base::{device_data::DeviceData, *};
+use crate::graphics::vk_base::{device_data::DeviceData, *};
 
 use ash::vk;
 
