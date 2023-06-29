@@ -8,6 +8,7 @@ pub struct Buffer {
     device_data: rc::Rc<device_data::DeviceData>,
     vk_buffer: vk::Buffer,
     memory: vk::DeviceMemory,
+    allocate_info: vk::MemoryAllocateInfo,
     len: usize,
 }
 
@@ -46,33 +47,23 @@ impl Buffer {
             .device
             .allocate_memory(&allocate_info, None)
             .unwrap();
-        let data_ptr: *mut c_void = device_data
-            .device
-            .map_memory(
-                memory,
-                0,
-                buffer_memory_requirements.size,
-                vk::MemoryMapFlags::empty(),
-            )
-            .unwrap();
-        let mut data_slice = Align::new(
-            data_ptr,
-            align_of::<u32>() as u64,
-            buffer_memory_requirements.size,
-        );
-        data_slice.copy_from_slice(data);
-        device_data.device.unmap_memory(memory);
+
         device_data
             .device
             .bind_buffer_memory(vk_buffer, memory, 0)
             .unwrap();
 
-        Self {
+        let mut buffer = Self {
             device_data,
             vk_buffer,
             memory,
+            allocate_info,
             len: data.len(),
-        }
+        };
+
+        buffer.set_data(data);
+
+        buffer
     }
 
     pub fn len(&self) -> usize {
@@ -82,17 +73,33 @@ impl Buffer {
     pub fn vk_buffer(&self) -> vk::Buffer {
         self.vk_buffer
     }
+
+    pub unsafe fn set_data<T: std::marker::Copy>(&mut self, data: &[T]) {
+        let data_ptr: *mut c_void = self
+            .device_data
+            .device
+            .map_memory(
+                self.memory,
+                0,
+                self.allocate_info.allocation_size,
+                vk::MemoryMapFlags::empty(),
+            )
+            .unwrap();
+        let mut data_slice = Align::new(
+            data_ptr,
+            align_of::<u32>() as u64,
+            self.allocate_info.allocation_size,
+        );
+        data_slice.copy_from_slice(data);
+        self.device_data.device.unmap_memory(self.memory);
+    }
 }
 
 impl Drop for Buffer {
     fn drop(&mut self) {
         unsafe {
-            self.device_data
-                .device
-                .free_memory(self.memory, None);
-            self.device_data
-                .device
-                .destroy_buffer(self.vk_buffer, None);
+            self.device_data.device.free_memory(self.memory, None);
+            self.device_data.device.destroy_buffer(self.vk_buffer, None);
         }
     }
 }

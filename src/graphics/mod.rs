@@ -1,5 +1,5 @@
-mod sprite_batch;
 mod mat4;
+mod sprite_batch;
 mod vk_base;
 mod vk_resources;
 
@@ -33,6 +33,8 @@ pub struct Graphics {
 
     window: winit::window::Window,
     event_loop: EventLoop<()>,
+
+    needs_resize: bool,
 }
 
 struct Resources {
@@ -62,6 +64,7 @@ struct Resources {
 
     projection_matrix: mat4::Mat4,
     projection_matrix_buffer: buffer::Buffer,
+    projection_matrix_buffer_descriptor: vk::DescriptorBufferInfo,
 }
 
 impl Graphics {
@@ -405,39 +408,17 @@ impl Graphics {
             },
         ]);
 
-        let mut projection_matrix = [0.0; 16];
-        // TODO: What's the best way to update this when the window resizes?
-        mat4::orthographic_projection(&mut projection_matrix, mat4::OrthographicProjectionInfo {
-            left: 0.0,
-            right: base.surface_data.resolution.width as f32,
-            bottom: 0.0,
-            top: base.surface_data.resolution.height as f32,
-            z_near: -1000.0,
-            z_far: 1000.0,
-        });
-        // TODO: Add a way to update buffers with a data array of the same length as
-        // the one they were created with, it would be useful for updating the projection
-        // matrix.
-        let projection_matrix_buffer = buffer::Buffer::new(&projection_matrix, base.device_data.clone(), vk::BufferUsageFlags::UNIFORM_BUFFER);
+        let projection_matrix = [0.0; 16];
+        let projection_matrix_buffer = buffer::Buffer::new(
+            &projection_matrix,
+            base.device_data.clone(),
+            vk::BufferUsageFlags::UNIFORM_BUFFER,
+        );
         let projection_matrix_buffer_descriptor = vk::DescriptorBufferInfo {
             buffer: projection_matrix_buffer.vk_buffer(),
             offset: 0,
             range: mem::size_of_val(&projection_matrix) as u64,
         };
-
-        let write_descriptor_sets = [
-            vk::WriteDescriptorSet {
-                dst_set: descriptor_sets[0],
-                dst_binding: 2,
-                descriptor_count: 1,
-                descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-                p_buffer_info: &projection_matrix_buffer_descriptor,
-                ..Default::default()
-            },
-        ];
-        base.device_data
-            .device
-            .update_descriptor_sets(&write_descriptor_sets, &[]);
 
         Self {
             resources: Resources {
@@ -464,6 +445,7 @@ impl Graphics {
 
                 projection_matrix,
                 projection_matrix_buffer,
+                projection_matrix_buffer_descriptor,
             },
 
             sprite_batch,
@@ -472,6 +454,8 @@ impl Graphics {
 
             window,
             event_loop,
+
+            needs_resize: true,
         }
     }
 
@@ -484,6 +468,43 @@ impl Graphics {
         } = self;
 
         VkBase::render_loop(window, &mut self.event_loop, || {
+            if self.needs_resize {
+                println!("Resized");
+                self.needs_resize = false;
+                base.device_data.device.device_wait_idle().unwrap();
+
+                let window_size = window.inner_size();
+                base.resize(window_size.width, window_size.height);
+                resources.render_pass.resize(window, &base.swapchain_data);
+
+                // TODO: Bundle all of this stuff together into a single
+                // uniform buffer struct that can be easily updated.
+                mat4::orthographic_projection(
+                    &mut resources.projection_matrix,
+                    mat4::OrthographicProjectionInfo {
+                        left: 0.0,
+                        right: base.surface_data.resolution.width as f32,
+                        bottom: 0.0,
+                        top: base.surface_data.resolution.height as f32,
+                        z_near: -1000.0,
+                        z_far: 1000.0,
+                    },
+                );
+                resources.projection_matrix_buffer.set_data(&resources.projection_matrix);
+
+                let write_descriptor_sets = [vk::WriteDescriptorSet {
+                    dst_set: resources.descriptor_sets[0],
+                    dst_binding: 2,
+                    descriptor_count: 1,
+                    descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+                    p_buffer_info: &resources.projection_matrix_buffer_descriptor,
+                    ..Default::default()
+                }];
+                base.device_data
+                    .device
+                    .update_descriptor_sets(&write_descriptor_sets, &[]);
+            }
+
             let (present_index, _) = match base.swapchain_data.loader.acquire_next_image(
                 base.swapchain_data.swapchain,
                 std::u64::MAX,
@@ -492,11 +513,7 @@ impl Graphics {
             ) {
                 Ok(values) => values,
                 Err(_) => {
-                    // TODO: Duplicate code.
-                    base.device_data.device.device_wait_idle().unwrap();
-                    let window_size = window.inner_size();
-                    base.resize(window_size.width, window_size.height);
-                    resources.render_pass.resize(window, &base.swapchain_data);
+                    self.needs_resize = true;
                     return;
                 }
             };
@@ -569,10 +586,7 @@ impl Graphics {
             {
                 Ok(_) => {}
                 Err(_) => {
-                    base.device_data.device.device_wait_idle().unwrap();
-                    let window_size = window.inner_size();
-                    base.resize(window_size.width, window_size.height);
-                    resources.render_pass.resize(window, &base.swapchain_data);
+                    self.needs_resize = true;
                 }
             }
         });
