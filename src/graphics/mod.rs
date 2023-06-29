@@ -1,4 +1,5 @@
 mod sprite_batch;
+mod mat4;
 mod vk_base;
 mod vk_resources;
 
@@ -58,6 +59,9 @@ struct Resources {
     // long as its descriptor is being used.
     #[allow(dead_code)]
     texture: texture::Texture,
+
+    projection_matrix: mat4::Mat4,
+    projection_matrix_buffer: buffer::Buffer,
 }
 
 impl Graphics {
@@ -78,6 +82,7 @@ impl Graphics {
             &window,
         );
 
+        // TODO: Use vk_resources::buffer here:
         let uniform_color_buffer_data = Vector3 {
             x: 1.0,
             y: 1.0,
@@ -167,7 +172,7 @@ impl Graphics {
             .device
             .create_descriptor_pool(&descriptor_pool_info, None)
             .unwrap();
-        let desc_layout_bindings = [
+        let descriptor_layout_bindings = [
             vk::DescriptorSetLayoutBinding {
                 descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
                 descriptor_count: 1,
@@ -181,9 +186,16 @@ impl Graphics {
                 stage_flags: vk::ShaderStageFlags::FRAGMENT,
                 ..Default::default()
             },
+            vk::DescriptorSetLayoutBinding {
+                binding: 2,
+                descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+                descriptor_count: 1,
+                stage_flags: vk::ShaderStageFlags::VERTEX,
+                ..Default::default()
+            },
         ];
         let descriptor_info = vk::DescriptorSetLayoutCreateInfo::builder()
-            .bindings(&desc_layout_bindings)
+            .bindings(&descriptor_layout_bindings)
             .build();
 
         let descriptor_set_layouts = [base
@@ -382,16 +394,50 @@ impl Graphics {
             sprite_batch::Sprite {
                 x: 0.0,
                 y: 0.0,
-                width: 0.5,
-                height: 0.5,
+                width: 64.0,
+                height: 32.0,
             },
             sprite_batch::Sprite {
-                x: 0.1,
-                y: 0.1,
-                width: 0.5,
-                height: 0.5,
+                x: 64.0,
+                y: 64.0,
+                width: 128.0,
+                height: 64.0,
             },
         ]);
+
+        let mut projection_matrix = [0.0; 16];
+        // TODO: What's the best way to update this when the window resizes?
+        mat4::orthographic_projection(&mut projection_matrix, mat4::OrthographicProjectionInfo {
+            left: 0.0,
+            right: base.surface_data.resolution.width as f32,
+            bottom: 0.0,
+            top: base.surface_data.resolution.height as f32,
+            z_near: -1000.0,
+            z_far: 1000.0,
+        });
+        // TODO: Add a way to update buffers with a data array of the same length as
+        // the one they were created with, it would be useful for updating the projection
+        // matrix.
+        let projection_matrix_buffer = buffer::Buffer::new(&projection_matrix, base.device_data.clone(), vk::BufferUsageFlags::UNIFORM_BUFFER);
+        let projection_matrix_buffer_descriptor = vk::DescriptorBufferInfo {
+            buffer: projection_matrix_buffer.vk_buffer(),
+            offset: 0,
+            range: mem::size_of_val(&projection_matrix) as u64,
+        };
+
+        let write_descriptor_sets = [
+            vk::WriteDescriptorSet {
+                dst_set: descriptor_sets[0],
+                dst_binding: 2,
+                descriptor_count: 1,
+                descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+                p_buffer_info: &projection_matrix_buffer_descriptor,
+                ..Default::default()
+            },
+        ];
+        base.device_data
+            .device
+            .update_descriptor_sets(&write_descriptor_sets, &[]);
 
         Self {
             resources: Resources {
@@ -415,6 +461,9 @@ impl Graphics {
                 descriptor_pool,
 
                 texture,
+
+                projection_matrix,
+                projection_matrix_buffer,
             },
 
             sprite_batch,
