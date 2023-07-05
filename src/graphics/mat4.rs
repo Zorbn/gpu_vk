@@ -1,5 +1,7 @@
 pub type Mat4 = [f32; 16];
 
+pub const Z_VIEW_DISTANCE: f32 = 1000.0;
+
 pub struct OrthographicProjectionInfo {
     pub left: f32,
     pub right: f32,

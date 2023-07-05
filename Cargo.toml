@@ -11,3 +11,4 @@ ash-window = "0.12"
 winit = "0.28"
 image = { version = "0.24", default-features = false, features = ["png"] }
 raw-window-handle = "0.5"
+vk-mem = { git = "https://github.com/gwihlidal/vk-mem-rs", version = "0.3" }

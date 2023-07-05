@@ -1,3 +1,5 @@
+use std::mem;
+
 use ash::{extensions::khr, vk};
 
 use super::{instance_data::InstanceData, surface_data::SurfaceData};
@@ -8,13 +10,11 @@ pub struct DeviceData {
     pub queue_family_index: u32,
     pub memory_properties: vk::PhysicalDeviceMemoryProperties,
     pub present_queue: vk::Queue,
+    pub allocator: mem::ManuallyDrop<vk_mem::Allocator>,
 }
 
 impl DeviceData {
-    pub unsafe fn new(
-        instance_data: &InstanceData,
-        surface_data: &SurfaceData,
-    ) -> Self {
+    pub unsafe fn new(instance_data: &InstanceData, surface_data: &SurfaceData) -> Self {
         let physical_devices = instance_data
             .instance
             .enumerate_physical_devices()
@@ -30,7 +30,8 @@ impl DeviceData {
                     .find_map(|(index, info)| {
                         let supports_graphic_and_surface =
                             info.queue_flags.contains(vk::QueueFlags::GRAPHICS)
-                                && surface_data.loader
+                                && surface_data
+                                    .loader
                                     .get_physical_device_surface_support(
                                         *physical_device,
                                         index as u32,
@@ -80,12 +81,17 @@ impl DeviceData {
 
         let present_queue = device.get_device_queue(queue_family_index, 0);
 
+        let allocator_create_info =
+            vk_mem::AllocatorCreateInfo::new(&instance_data.instance, &device, physical_device);
+        let allocator = vk_mem::Allocator::new(allocator_create_info).expect("Failed to create VMA allocator");
+
         Self {
             device,
             physical_device,
             queue_family_index,
             memory_properties,
             present_queue,
+            allocator: mem::ManuallyDrop::new(allocator),
         }
     }
 
@@ -164,6 +170,7 @@ impl DeviceData {
 impl Drop for DeviceData {
     fn drop(&mut self) {
         unsafe {
+            mem::ManuallyDrop::drop(&mut self.allocator);
             self.device.destroy_device(None);
         }
     }

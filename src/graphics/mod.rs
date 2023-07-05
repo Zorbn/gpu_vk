@@ -469,7 +469,6 @@ impl Graphics {
 
         VkBase::render_loop(window, &mut self.event_loop, || {
             if self.needs_resize {
-                println!("Resized");
                 self.needs_resize = false;
                 base.device_data.device.device_wait_idle().unwrap();
 
@@ -486,8 +485,8 @@ impl Graphics {
                         right: base.surface_data.resolution.width as f32,
                         bottom: 0.0,
                         top: base.surface_data.resolution.height as f32,
-                        z_near: -1000.0,
-                        z_far: 1000.0,
+                        z_near: -mat4::Z_VIEW_DISTANCE,
+                        z_far: mat4::Z_VIEW_DISTANCE,
                     },
                 );
                 resources.projection_matrix_buffer.set_data(&resources.projection_matrix);
