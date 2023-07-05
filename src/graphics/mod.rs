@@ -3,11 +3,7 @@ mod sprite_batch;
 mod vk_base;
 mod vk_resources;
 
-use std::default::Default;
-use std::ffi::CStr;
-use std::io::Cursor;
-use std::mem::{self, align_of};
-use std::rc;
+use std::{default::Default, ffi::CStr, io::Cursor, mem, rc};
 
 use ash::util::*;
 use ash::vk;
@@ -50,8 +46,9 @@ struct Resources {
     vertex_shader_module: vk::ShaderModule,
     fragment_shader_module: vk::ShaderModule,
 
-    uniform_color_buffer_memory: vk::DeviceMemory,
-    uniform_color_buffer: vk::Buffer,
+    // Keep the uniform buffer alive with the rest of the resources.
+    #[allow(dead_code)]
+    uniform_color_buffer: buffer::Buffer,
 
     descriptor_sets: Vec<vk::DescriptorSet>,
     descriptor_set_layouts: [vk::DescriptorSetLayout; 1],
@@ -84,70 +81,6 @@ impl Graphics {
             &base.swapchain_data,
             &window,
         );
-
-        // TODO: Use vk_resources::buffer here:
-        let uniform_color_buffer_data = Vector3 {
-            x: 1.0,
-            y: 1.0,
-            z: 1.0,
-            _pad: 0.0,
-        };
-        let uniform_color_buffer_info = vk::BufferCreateInfo {
-            size: std::mem::size_of_val(&uniform_color_buffer_data) as u64,
-            usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
-            sharing_mode: vk::SharingMode::EXCLUSIVE,
-            ..Default::default()
-        };
-        let uniform_color_buffer = base
-            .device_data
-            .device
-            .create_buffer(&uniform_color_buffer_info, None)
-            .unwrap();
-        let uniform_color_buffer_memory_req = base
-            .device_data
-            .device
-            .get_buffer_memory_requirements(uniform_color_buffer);
-        let uniform_color_buffer_memory_index = base
-            .device_data
-            .find_memory_type_index(
-                &uniform_color_buffer_memory_req,
-                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-            )
-            .expect("Unable to find suitable memory type for the vertex buffer");
-
-        let uniform_color_buffer_allocate_info = vk::MemoryAllocateInfo {
-            allocation_size: uniform_color_buffer_memory_req.size,
-            memory_type_index: uniform_color_buffer_memory_index,
-            ..Default::default()
-        };
-        let uniform_color_buffer_memory = base
-            .device_data
-            .device
-            .allocate_memory(&uniform_color_buffer_allocate_info, None)
-            .unwrap();
-        let uniform_ptr = base
-            .device_data
-            .device
-            .map_memory(
-                uniform_color_buffer_memory,
-                0,
-                uniform_color_buffer_memory_req.size,
-                vk::MemoryMapFlags::empty(),
-            )
-            .unwrap();
-        let mut uniform_aligned_slice = Align::new(
-            uniform_ptr,
-            align_of::<Vector3>() as u64,
-            uniform_color_buffer_memory_req.size,
-        );
-        uniform_aligned_slice.copy_from_slice(&[uniform_color_buffer_data]);
-        base.device_data
-            .device
-            .unmap_memory(uniform_color_buffer_memory);
-        base.device_data
-            .device
-            .bind_buffer_memory(uniform_color_buffer, uniform_color_buffer_memory, 0)
-            .unwrap();
 
         let texture = texture::Texture::new(
             "assets/rust.png",
@@ -217,8 +150,15 @@ impl Graphics {
             .allocate_descriptor_sets(&descriptor_alloc_info)
             .unwrap();
 
+        let uniform_color_buffer_data = Vector3 {
+            x: 1.0,
+            y: 1.0,
+            z: 1.0,
+            _pad: 0.0,
+        };
+        let uniform_color_buffer = buffer::Buffer::new(&[uniform_color_buffer_data], base.device_data.clone(), vk::BufferUsageFlags::UNIFORM_BUFFER);
         let uniform_color_buffer_descriptor = vk::DescriptorBufferInfo {
-            buffer: uniform_color_buffer,
+            buffer: uniform_color_buffer.vk_buffer(),
             offset: 0,
             range: mem::size_of_val(&uniform_color_buffer_data) as u64,
         };
@@ -436,7 +376,6 @@ impl Graphics {
                 vertex_shader_module,
                 fragment_shader_module,
 
-                uniform_color_buffer_memory,
                 uniform_color_buffer,
 
                 descriptor_sets,
@@ -611,12 +550,6 @@ impl Drop for Resources {
             self.device_data
                 .device
                 .destroy_shader_module(self.fragment_shader_module, None);
-            self.device_data
-                .device
-                .free_memory(self.uniform_color_buffer_memory, None);
-            self.device_data
-                .device
-                .destroy_buffer(self.uniform_color_buffer, None);
             for &descriptor_set_layout in self.descriptor_set_layouts.iter() {
                 self.device_data
                     .device
