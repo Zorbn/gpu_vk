@@ -61,7 +61,7 @@ impl Buffer {
         let data_ptr = self.device_data.allocator.map_memory(&mut self.allocation).unwrap() as *mut c_void;
         let mut data_slice = Align::new(
             data_ptr,
-            align_of::<u32>() as u64,
+            align_of::<T>() as u64,
             self.allocation_info.size,
         );
         data_slice.copy_from_slice(data);

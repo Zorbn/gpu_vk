@@ -1,16 +1,20 @@
 use ash::vk;
-use std::{fs, io, rc};
+use std::{fs, io, mem, rc};
+use vk_mem::Alloc;
 
-use crate::graphics::vk_base::*;
+use crate::graphics::{vk_base::*, vk_resources::*};
 
 pub struct Texture {
     pub descriptor: vk::DescriptorImageInfo,
 
     device_data: rc::Rc<device_data::DeviceData>,
-    image_buffer_memory: vk::DeviceMemory,
-    image_buffer: vk::Buffer,
+
+    // Maintain the texture's image buffer until the texture is dropped.
+    #[allow(dead_code)]
+    image_buffer: buffer::Buffer,
+
     image_view: vk::ImageView,
-    memory: vk::DeviceMemory,
+    allocation: mem::ManuallyDrop<vk_mem::Allocation>,
     texture_image: vk::Image,
     sampler: vk::Sampler,
 }
@@ -29,57 +33,12 @@ impl Texture {
         let (width, height) = image.dimensions();
         let image_extent = vk::Extent2D { width, height };
         let image_data = image.into_raw();
-        let image_buffer_info = vk::BufferCreateInfo {
-            size: (std::mem::size_of::<u8>() * image_data.len()) as u64,
-            usage: vk::BufferUsageFlags::TRANSFER_SRC,
-            sharing_mode: vk::SharingMode::EXCLUSIVE,
-            ..Default::default()
-        };
-        let image_buffer = device_data
-            .device
-            .create_buffer(&image_buffer_info, None)
-            .unwrap();
-        let image_buffer_memory_req = device_data
-            .device
-            .get_buffer_memory_requirements(image_buffer);
-        let image_buffer_memory_index = device_data
-            .find_memory_type_index(
-                &image_buffer_memory_req,
-                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-            )
-            .expect("Unable to find suitable memory type for the image buffer");
-
-        let image_buffer_allocate_info = vk::MemoryAllocateInfo {
-            allocation_size: image_buffer_memory_req.size,
-            memory_type_index: image_buffer_memory_index,
-            ..Default::default()
-        };
-        let image_buffer_memory = device_data
-            .device
-            .allocate_memory(&image_buffer_allocate_info, None)
-            .unwrap();
-        let image_ptr = device_data
-            .device
-            .map_memory(
-                image_buffer_memory,
-                0,
-                image_buffer_memory_req.size,
-                vk::MemoryMapFlags::empty(),
-            )
-            .unwrap();
-        let mut image_slice = ash::util::Align::new(
-            image_ptr,
-            std::mem::align_of::<u8>() as u64,
-            image_buffer_memory_req.size,
+        let image_buffer = buffer::Buffer::new(
+            &image_data,
+            device_data.clone(),
+            vk::BufferUsageFlags::TRANSFER_SRC,
         );
-        image_slice.copy_from_slice(&image_data);
-        device_data.device.unmap_memory(image_buffer_memory);
-        device_data
-            .device
-            .bind_buffer_memory(image_buffer, image_buffer_memory, 0)
-            .unwrap();
-
-        let create_info = vk::ImageCreateInfo {
+        let image_info = vk::ImageCreateInfo {
             image_type: vk::ImageType::TYPE_2D,
             format: vk::Format::R8G8B8A8_UNORM,
             extent: image_extent.into(),
@@ -91,30 +50,16 @@ impl Texture {
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
         };
-        let texture_image = device_data
-            .device
-            .create_image(&create_info, None)
-            .unwrap();
-        let memory_requirements = device_data
-            .device
-            .get_image_memory_requirements(texture_image);
-        let memory_index = device_data
-            .find_memory_type_index(&memory_requirements, vk::MemoryPropertyFlags::DEVICE_LOCAL)
-            .expect("Unable to find suitable memory index for depth image");
 
-        let allocate_info = vk::MemoryAllocateInfo {
-            allocation_size: memory_requirements.size,
-            memory_type_index: memory_index,
+        let allocation_info = vk_mem::AllocationCreateInfo {
+            usage: vk_mem::MemoryUsage::Auto,
             ..Default::default()
         };
-        let memory = device_data
-            .device
-            .allocate_memory(&allocate_info, None)
+
+        let (texture_image, allocation) = device_data
+            .allocator
+            .create_image(&image_info, &allocation_info)
             .unwrap();
-        device_data
-            .device
-            .bind_image_memory(texture_image, memory, 0)
-            .expect("Unable to bind depth image memory");
 
         device_data.record_submit(
             command_data.setup_buffer,
@@ -156,7 +101,7 @@ impl Texture {
 
                 device.cmd_copy_buffer_to_image(
                     texture_command_buffer,
-                    image_buffer,
+                    image_buffer.vk_buffer(),
                     texture_image,
                     vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                     &[buffer_copy_regions],
@@ -207,7 +152,7 @@ impl Texture {
 
         let image_view_info = vk::ImageViewCreateInfo {
             view_type: vk::ImageViewType::TYPE_2D,
-            format: create_info.format,
+            format: image_info.format,
             components: vk::ComponentMapping {
                 r: vk::ComponentSwizzle::R,
                 g: vk::ComponentSwizzle::G,
@@ -238,10 +183,9 @@ impl Texture {
         Self {
             device_data,
             descriptor,
-            image_buffer_memory,
             image_buffer,
             image_view,
-            memory,
+            allocation: mem::ManuallyDrop::new(allocation),
             texture_image,
             sampler,
         }
@@ -252,14 +196,14 @@ impl Drop for Texture {
     fn drop(&mut self) {
         unsafe {
             self.device_data
-                .device
-                .free_memory(self.image_buffer_memory, None);
-            self.device_data.device.destroy_buffer(self.image_buffer, None);
-            self.device_data.device.free_memory(self.memory, None);
+                .allocator
+                .free_memory(mem::ManuallyDrop::take(&mut self.allocation));
             self.device_data
                 .device
                 .destroy_image_view(self.image_view, None);
-            self.device_data.device.destroy_image(self.texture_image, None);
+            self.device_data
+                .device
+                .destroy_image(self.texture_image, None);
             self.device_data.device.destroy_sampler(self.sampler, None);
         }
     }
