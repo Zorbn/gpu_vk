@@ -6,12 +6,12 @@ layout (binding = 2) uniform UBO {
     mat4 projection_matrix;
 } ubo;
 
-layout (location = 0) in vec4 i_pos;
+layout (location = 0) in vec3 i_pos;
 layout (location = 1) in vec2 i_uv;
 
 
 layout (location = 0) out vec2 o_uv;
 void main() {
     o_uv = i_uv;
-    gl_Position = ubo.projection_matrix * i_pos;
+    gl_Position = ubo.projection_matrix * vec4(i_pos, 1.0);
 }

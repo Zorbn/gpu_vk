@@ -397,12 +397,14 @@ impl Graphics {
             sprite_batch::Sprite {
                 x: 0.0,
                 y: 0.0,
+                z: 1.0,
                 width: 64.0,
                 height: 32.0,
             },
             sprite_batch::Sprite {
-                x: 64.0,
-                y: 64.0,
+                x: 16.0,
+                y: 16.0,
+                z: -1.0,
                 width: 128.0,
                 height: 64.0,
             },

@@ -13,7 +13,6 @@ pub struct Buffer {
     len: usize,
 }
 
-// NOTE: Each buffer allocates its own memory on the GPU.
 impl Buffer {
     pub unsafe fn new<T: std::marker::Copy>(
         data: &[T],

@@ -5,10 +5,9 @@ use ash::vk;
 use super::vk_base::*;
 use super::vk_resources::buffer;
 
-// TODO: Use Vec3's instead.
 #[derive(Clone, Debug, Copy)]
 pub struct Vertex {
-    pos: [f32; 4],
+    pos: [f32; 3],
     uv: [f32; 2],
 }
 
@@ -26,7 +25,7 @@ impl Vertex {
             vk::VertexInputAttributeDescription {
                 location: 0,
                 binding: 0,
-                format: vk::Format::R32G32B32A32_SFLOAT,
+                format: vk::Format::R32G32B32_SFLOAT,
                 offset: crate::offset_of!(Vertex, pos) as u32,
             },
             vk::VertexInputAttributeDescription {
@@ -44,10 +43,10 @@ impl Vertex {
     }
 }
 
-// TODO: Add z.
 pub struct Sprite {
     pub x: f32,
     pub y: f32,
+    pub z: f32,
     pub width: f32,
     pub height: f32,
 }
@@ -79,19 +78,19 @@ impl SpriteBatch {
             let vertex_count = self.vertices.len() as u32;
 
             self.vertices.push(Vertex {
-                pos: [sprite.x, sprite.y, 0.0, 1.0],
+                pos: [sprite.x, sprite.y, sprite.z],
                 uv: [0.0, 0.0],
             });
             self.vertices.push(Vertex {
-                pos: [sprite.x, sprite.y + sprite.height, 0.0, 1.0],
+                pos: [sprite.x, sprite.y + sprite.height, sprite.z],
                 uv: [0.0, 1.0],
             });
             self.vertices.push(Vertex {
-                pos: [sprite.x + sprite.width, sprite.y + sprite.height, 0.0, 1.0],
+                pos: [sprite.x + sprite.width, sprite.y + sprite.height, sprite.z],
                 uv: [1.0, 1.0],
             });
             self.vertices.push(Vertex {
-                pos: [sprite.x + sprite.width, sprite.y, 0.0, 1.0],
+                pos: [sprite.x + sprite.width, sprite.y, sprite.z],
                 uv: [1.0, 0.0],
             });
 

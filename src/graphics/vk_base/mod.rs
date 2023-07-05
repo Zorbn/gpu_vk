@@ -173,7 +173,6 @@ impl VkBase {
         }
     }
 
-    // TODO: Unsafe?
     pub fn resize(&mut self, window_width: u32, window_height: u32) {
         self.surface_data.resolution.width = window_width;
         self.surface_data.resolution.height = window_height;
