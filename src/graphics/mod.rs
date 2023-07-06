@@ -1,9 +1,11 @@
+pub mod app;
+pub mod sprite_batch;
+
 mod mat4;
-mod sprite_batch;
 mod vk_base;
 mod vk_resources;
 
-use std::{default::Default, ffi::CStr, io::Cursor, mem, rc};
+use std::{default::Default, ffi::CStr, io::Cursor, mem, rc, time};
 
 use ash::util::*;
 use ash::vk;
@@ -21,7 +23,9 @@ pub struct Vector3 {
     pub _pad: f32,
 }
 
-pub struct Graphics {
+pub struct Graphics<T: app::App> {
+    app: T,
+
     resources: Resources,
     sprite_batch: sprite_batch::SpriteBatch,
 
@@ -64,7 +68,7 @@ struct Resources {
     projection_matrix_buffer_descriptor: vk::DescriptorBufferInfo,
 }
 
-impl Graphics {
+impl<T: app::App> Graphics<T> {
     pub unsafe fn new(title: &str) -> Self {
         let event_loop = EventLoop::new();
         let window = WindowBuilder::new()
@@ -333,22 +337,6 @@ impl Graphics {
             .unwrap();
 
         let mut sprite_batch = sprite_batch::SpriteBatch::new(base.device_data.clone());
-        sprite_batch.batch(&[
-            sprite_batch::Sprite {
-                x: 0.0,
-                y: 0.0,
-                z: 1.0,
-                width: 64.0,
-                height: 32.0,
-            },
-            sprite_batch::Sprite {
-                x: 16.0,
-                y: 16.0,
-                z: -1.0,
-                width: 128.0,
-                height: 64.0,
-            },
-        ]);
 
         let projection_matrix = [0.0; 16];
         let projection_matrix_buffer = buffer::Buffer::new(
@@ -389,6 +377,8 @@ impl Graphics {
                 projection_matrix_buffer_descriptor,
             },
 
+            app: T::new(),
+
             sprite_batch,
 
             base,
@@ -408,7 +398,14 @@ impl Graphics {
             ..
         } = self;
 
+        let mut now = time::Instant::now();
+
         VkBase::render_loop(window, &mut self.event_loop, || {
+            let delta_time = now.elapsed().as_secs_f32();
+            now = time::Instant::now();
+
+            self.app.update(delta_time, &mut self.sprite_batch);
+
             if self.needs_resize {
                 self.needs_resize = false;
                 base.device_data.device.device_wait_idle().unwrap();

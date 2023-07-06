@@ -70,7 +70,7 @@ impl SpriteBatch {
         }
     }
 
-    pub unsafe fn batch(&mut self, sprites: &[Sprite]) {
+    pub fn batch(&mut self, sprites: &[Sprite]) {
         self.vertices.clear();
         self.indices.clear();
 
@@ -102,19 +102,29 @@ impl SpriteBatch {
             self.indices.push(vertex_count);
         }
 
-        self.device_data.device.device_wait_idle().unwrap();
+        unsafe {
+            self.device_data.device.device_wait_idle().unwrap();
 
-        self.index_buffer = Some(buffer::Buffer::new(
-            &self.indices,
-            self.device_data.clone(),
-            vk::BufferUsageFlags::INDEX_BUFFER,
-        ));
+            // Buffers can't be initialized with no data, so if either buffer
+            // has no data (ie: because the sprites slice is empty) then return.
+            if self.indices.is_empty() || self.vertices.is_empty() {
+                self.index_buffer = None;
+                self.vertex_buffer = None;
+                return;
+            }
 
-        self.vertex_buffer = Some(buffer::Buffer::new(
-            &self.vertices,
-            self.device_data.clone(),
-            vk::BufferUsageFlags::VERTEX_BUFFER,
-        ));
+            self.index_buffer = Some(buffer::Buffer::new(
+                &self.indices,
+                self.device_data.clone(),
+                vk::BufferUsageFlags::INDEX_BUFFER,
+            ));
+
+            self.vertex_buffer = Some(buffer::Buffer::new(
+                &self.vertices,
+                self.device_data.clone(),
+                vk::BufferUsageFlags::VERTEX_BUFFER,
+            ));
+        }
     }
 
     pub unsafe fn draw(&self, device: &ash::Device, command_buffer: vk::CommandBuffer) {
