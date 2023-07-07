@@ -2,7 +2,7 @@ use std::{io, mem, rc};
 
 use ash::vk;
 
-use super::{vk_base::*, vk_resources::*, *};
+use super::{texture, vk_base::*, vk_resources::*, *};
 
 #[derive(Clone, Debug, Copy)]
 pub struct Vertex {
@@ -68,15 +68,14 @@ pub struct SpriteBatch {
     descriptor_set_layouts: [vk::DescriptorSetLayout; 1],
     descriptor_pool: vk::DescriptorPool,
 
-    texture: texture::Texture,
+    texture: rc::Rc<texture::Texture>,
 }
 
 impl SpriteBatch {
-    pub fn new(resources: &Resources, texture_path: &str) -> Self {
+    pub fn new(resources: &Resources, texture: rc::Rc<texture::Texture>) -> Self {
         // TODO: Maybe textures should be created by the user using a similar API to the sprite
         // batches? Then the sprite batch would accept a texture?
         unsafe {
-            let texture = texture::Texture::new(resources, texture_path);
 
             let descriptor_sizes = [
                 vk::DescriptorPoolSize {

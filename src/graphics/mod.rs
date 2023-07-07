@@ -1,5 +1,6 @@
 pub mod app;
 pub mod sprite_batch;
+pub mod texture;
 
 mod mat4;
 mod vk_base;

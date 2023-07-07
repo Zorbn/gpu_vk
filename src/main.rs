@@ -1,6 +1,8 @@
 mod graphics;
 
-use graphics::*;
+use graphics::{*, texture};
+
+use std::{rc};
 
 struct App {
     time: f32,
@@ -10,10 +12,13 @@ struct App {
 
 impl app::App for App {
     fn new(resources: &mut Resources) -> Self {
+        let rust_texture = rc::Rc::new(texture::Texture::new(resources, "assets/rust.png"));
+        let evil_rust_texture = rc::Rc::new(texture::Texture::new(resources, "assets/evil_rust.png"));
+
         Self {
             time: 0.0,
-            sprite_batch: sprite_batch::SpriteBatch::new(resources, "assets/rust.png"),
-            evil_sprite_batch: sprite_batch::SpriteBatch::new(resources, "assets/evil_rust.png"),
+            sprite_batch: sprite_batch::SpriteBatch::new(resources, rust_texture),
+            evil_sprite_batch: sprite_batch::SpriteBatch::new(resources, evil_rust_texture),
         }
     }
 
