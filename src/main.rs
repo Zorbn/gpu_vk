@@ -8,14 +8,14 @@ struct App {
 }
 
 impl app::App for App {
-    fn new(graphics: &mut Graphics) -> Self {
+    fn new(resources: &mut Resources) -> Self {
         Self {
             time: 0.0,
-            sprite_batch: sprite_batch::SpriteBatch::new(graphics),
+            sprite_batch: sprite_batch::SpriteBatch::new(resources),
         }
     }
 
-    fn update(&mut self, graphics: &mut Graphics, delta_time: f32) {
+    fn update(&mut self, resources: &mut Resources, delta_time: f32) {
         self.time += delta_time;
         let sprite_position = self.time.sin() * 320.0 + 320.0;
 

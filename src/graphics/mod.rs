@@ -5,7 +5,7 @@ mod mat4;
 mod vk_base;
 mod vk_resources;
 
-use std::{default::Default, ffi::CStr, io::Cursor, mem, rc, time};
+use std::{default::Default, ffi::CStr, io::Cursor, mem, time};
 
 use ash::util::*;
 use ash::vk;
@@ -37,17 +37,13 @@ impl<'a> Draw<'a> {
 pub struct Graphics {
     resources: Resources,
 
-    base: vk_base::VkBase,
-
     window: Option<winit::window::Window>,
     event_loop: Option<EventLoop<()>>,
 
     needs_resize: bool,
 }
 
-struct Resources {
-    device_data: rc::Rc<device_data::DeviceData>,
-
+pub struct Resources {
     render_pass: render_pass::RenderPass,
     viewports: [vk::Viewport; 1],
     scissors: [vk::Rect2D; 1],
@@ -74,6 +70,8 @@ struct Resources {
     projection_matrix: mat4::Mat4,
     projection_matrix_buffer: buffer::Buffer,
     projection_matrix_buffer_descriptor: vk::DescriptorBufferInfo,
+
+    base: vk_base::VkBase,
 }
 
 impl Graphics {
@@ -356,15 +354,8 @@ impl Graphics {
             range: mem::size_of_val(&projection_matrix) as u64,
         };
 
-        // TODO: Instead of passing "Graphics" to the App, there should be a group of resources
-        // similar to "Resources" but with access to "base" that gets passed instead. This would
-        // make the API more intuitive, you draw in the draw function and update resources in the
-        // new/update functions. Resources was originally created for ordering how things are
-        // dropped, maybe include base in resources directly and then use ManuallyDrop<> for it?
         Self {
             resources: Resources {
-                device_data: base.device_data.clone(),
-
                 render_pass,
                 viewports,
                 scissors,
@@ -386,9 +377,9 @@ impl Graphics {
                 projection_matrix,
                 projection_matrix_buffer,
                 projection_matrix_buffer_descriptor,
-            },
 
-            base,
+                base,
+            },
 
             window: Some(window),
             event_loop: Some(event_loop),
@@ -401,22 +392,22 @@ impl Graphics {
         let window = self.window.take().expect("Tried to run an app without a window, running an app consumes the window it is run with");
         let mut event_loop = self.event_loop.take().expect("Tried to run an app without an event loop, running an app consumes the event loop it is run with");
 
-        let mut app = T::new(self);
+        let mut app = T::new(&mut self.resources);
         let mut now = time::Instant::now();
 
         VkBase::render_loop(&window, &mut event_loop, || {
             let delta_time = now.elapsed().as_secs_f32();
             now = time::Instant::now();
 
-            app.update(self, delta_time);
+            app.update(&mut self.resources, delta_time);
 
             if self.needs_resize {
                 self.needs_resize = false;
-                self.base.device_data.device.device_wait_idle().unwrap();
+                self.resources.base.device_data.device.device_wait_idle().unwrap();
 
                 let window_size = window.inner_size();
-                self.base.resize(window_size.width, window_size.height);
-                self.resources.render_pass.resize(&window, &self.base.swapchain_data);
+                self.resources.base.resize(window_size.width, window_size.height);
+                self.resources.render_pass.resize(&window, &self.resources.base.swapchain_data);
 
                 // TODO: Bundle all of this stuff together into a single
                 // uniform buffer struct that can be easily updated.
@@ -424,9 +415,9 @@ impl Graphics {
                     &mut self.resources.projection_matrix,
                     mat4::OrthographicProjectionInfo {
                         left: 0.0,
-                        right: self.base.surface_data.resolution.width as f32,
+                        right: self.resources.base.surface_data.resolution.width as f32,
                         bottom: 0.0,
-                        top: self.base.surface_data.resolution.height as f32,
+                        top: self.resources.base.surface_data.resolution.height as f32,
                         z_near: -mat4::Z_VIEW_DISTANCE,
                         z_far: mat4::Z_VIEW_DISTANCE,
                     },
@@ -441,15 +432,15 @@ impl Graphics {
                     p_buffer_info: &self.resources.projection_matrix_buffer_descriptor,
                     ..Default::default()
                 }];
-                self.base.device_data
+                self.resources.base.device_data
                     .device
                     .update_descriptor_sets(&write_descriptor_sets, &[]);
             }
 
-            let (present_index, _) = match self.base.swapchain_data.loader.acquire_next_image(
-                self.base.swapchain_data.swapchain,
+            let (present_index, _) = match self.resources.base.swapchain_data.loader.acquire_next_image(
+                self.resources.base.swapchain_data.swapchain,
                 std::u64::MAX,
-                self.base.sync_data.present_complete_semaphore,
+                self.resources.base.sync_data.present_complete_semaphore,
                 vk::Fence::null(),
             ) {
                 Ok(values) => values,
@@ -473,22 +464,22 @@ impl Graphics {
                 },
             ];
 
-            self.resources.viewports[0].width = self.base.surface_data.resolution.width as f32;
-            self.resources.viewports[0].height = self.base.surface_data.resolution.height as f32;
-            self.resources.scissors[0].extent.width = self.base.surface_data.resolution.width;
-            self.resources.scissors[0].extent.height = self.base.surface_data.resolution.height;
+            self.resources.viewports[0].width = self.resources.base.surface_data.resolution.width as f32;
+            self.resources.viewports[0].height = self.resources.base.surface_data.resolution.height as f32;
+            self.resources.scissors[0].extent.width = self.resources.base.surface_data.resolution.width;
+            self.resources.scissors[0].extent.height = self.resources.base.surface_data.resolution.height;
 
-            self.base.device_data.record_submit(
-                self.base.command_data.draw_buffer,
-                self.base.sync_data.draw_commands_reuse_fence,
+            self.resources.base.device_data.record_submit(
+                self.resources.base.command_data.draw_buffer,
+                self.resources.base.sync_data.draw_commands_reuse_fence,
                 &[vk::PipelineStageFlags::BOTTOM_OF_PIPE],
-                &[self.base.sync_data.present_complete_semaphore],
-                &[self.base.sync_data.rendering_complete_semaphore],
+                &[self.resources.base.sync_data.present_complete_semaphore],
+                &[self.resources.base.sync_data.rendering_complete_semaphore],
                 |device, command_buffer| {
                     self.resources.render_pass.begin(
                         device,
                         command_buffer,
-                        &self.base.surface_data,
+                        &self.resources.base.surface_data,
                         present_index,
                         &clear_values,
                     );
@@ -517,17 +508,17 @@ impl Graphics {
             );
             let present_info = vk::PresentInfoKHR {
                 wait_semaphore_count: 1,
-                p_wait_semaphores: &self.base.sync_data.rendering_complete_semaphore,
+                p_wait_semaphores: &self.resources.base.sync_data.rendering_complete_semaphore,
                 swapchain_count: 1,
-                p_swapchains: &self.base.swapchain_data.swapchain,
+                p_swapchains: &self.resources.base.swapchain_data.swapchain,
                 p_image_indices: &present_index,
                 ..Default::default()
             };
 
-            match self.base
+            match self.resources.base
                 .swapchain_data
                 .loader
-                .queue_present(self.base.device_data.present_queue, &present_info)
+                .queue_present(self.resources.base.device_data.present_queue, &present_info)
             {
                 Ok(_) => {}
                 Err(_) => {
@@ -541,26 +532,26 @@ impl Graphics {
 impl Drop for Resources {
     fn drop(&mut self) {
         unsafe {
-            self.device_data.device.device_wait_idle().unwrap();
+            self.base.device_data.device.device_wait_idle().unwrap();
 
             for pipeline in &self.pipelines {
-                self.device_data.device.destroy_pipeline(*pipeline, None);
+                self.base.device_data.device.destroy_pipeline(*pipeline, None);
             }
-            self.device_data
+            self.base.device_data
                 .device
                 .destroy_pipeline_layout(self.pipeline_layout, None);
-            self.device_data
+            self.base.device_data
                 .device
                 .destroy_shader_module(self.vertex_shader_module, None);
-            self.device_data
+            self.base.device_data
                 .device
                 .destroy_shader_module(self.fragment_shader_module, None);
             for &descriptor_set_layout in self.descriptor_set_layouts.iter() {
-                self.device_data
+                self.base.device_data
                     .device
                     .destroy_descriptor_set_layout(descriptor_set_layout, None);
             }
-            self.device_data
+            self.base.device_data
                 .device
                 .destroy_descriptor_pool(self.descriptor_pool, None);
         }

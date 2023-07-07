@@ -59,9 +59,9 @@ pub struct SpriteBatch {
 }
 
 impl SpriteBatch {
-    pub fn new(graphics: &Graphics) -> Self {
+    pub fn new(resources: &Resources) -> Self {
         Self {
-            device_data: graphics.base.device_data.clone(),
+            device_data: resources.base.device_data.clone(),
             index_buffer: None,
             vertex_buffer: None,
             vertices: Vec::new(),
