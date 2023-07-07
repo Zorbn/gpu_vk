@@ -73,10 +73,7 @@ pub struct SpriteBatch {
 
 impl SpriteBatch {
     pub fn new(resources: &Resources, texture: rc::Rc<texture::Texture>) -> Self {
-        // TODO: Maybe textures should be created by the user using a similar API to the sprite
-        // batches? Then the sprite batch would accept a texture?
         unsafe {
-
             let descriptor_sizes = [
                 vk::DescriptorPoolSize {
                     ty: vk::DescriptorType::UNIFORM_BUFFER,

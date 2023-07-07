@@ -16,14 +16,6 @@ use vk_resources::*;
 use winit::event_loop::EventLoop;
 use winit::window::WindowBuilder;
 
-#[derive(Clone, Debug, Copy)]
-pub struct Vector3 {
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
-    pub _pad: f32,
-}
-
 pub struct Draw<'a> {
     device: &'a ash::Device,
     command_buffer: vk::CommandBuffer,
@@ -37,6 +29,7 @@ pub struct Graphics {
     event_loop: Option<EventLoop<()>>,
 
     needs_resize: bool,
+    needs_first_draw: bool,
 }
 
 pub struct Resources {
@@ -57,6 +50,8 @@ impl Graphics {
         let window = WindowBuilder::new()
             .with_title(title)
             .with_inner_size(winit::dpi::LogicalSize::new(f64::from(640), f64::from(480)))
+            // The window will remain hidden until it has been drawn to at least once.
+            .with_visible(false)
             .build(&event_loop)
             .unwrap();
 
@@ -109,6 +104,7 @@ impl Graphics {
             event_loop: Some(event_loop),
 
             needs_resize: true,
+            needs_first_draw: true,
         }
     }
 
@@ -227,6 +223,7 @@ impl Graphics {
                     self.resources.render_pass.end(device, command_buffer)
                 },
             );
+
             let present_info = vk::PresentInfoKHR {
                 wait_semaphore_count: 1,
                 p_wait_semaphores: &self.resources.base.sync_data.rendering_complete_semaphore,
@@ -247,6 +244,13 @@ impl Graphics {
                 Err(_) => {
                     self.needs_resize = true;
                 }
+            }
+
+            // Show the window only after it has been drawn to once, to prevent a jarring
+            // appearance on startup.
+            if self.needs_first_draw {
+                self.needs_first_draw = false;
+                window.set_visible(true);
             }
         });
     }
