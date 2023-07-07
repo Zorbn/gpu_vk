@@ -2,8 +2,7 @@ use std::{rc, mem};
 
 use ash::vk;
 
-use super::vk_base::*;
-use super::vk_resources::buffer;
+use super::{*, vk_base::*, vk_resources::*};
 
 #[derive(Clone, Debug, Copy)]
 pub struct Vertex {
@@ -60,9 +59,9 @@ pub struct SpriteBatch {
 }
 
 impl SpriteBatch {
-    pub unsafe fn new(device_data: rc::Rc<device_data::DeviceData>) -> Self {
+    pub fn new(graphics: &Graphics) -> Self {
         Self {
-            device_data,
+            device_data: graphics.base.device_data.clone(),
             index_buffer: None,
             vertex_buffer: None,
             vertices: Vec::new(),
@@ -127,7 +126,7 @@ impl SpriteBatch {
         }
     }
 
-    pub unsafe fn draw(&self, device: &ash::Device, command_buffer: vk::CommandBuffer) {
+    pub fn draw(&self, device: &ash::Device, command_buffer: vk::CommandBuffer) {
         if self.vertex_buffer.is_none() || self.index_buffer.is_none() {
             return;
         }
@@ -135,13 +134,15 @@ impl SpriteBatch {
         let vertex_buffer = self.vertex_buffer.as_ref().unwrap();
         let index_buffer = self.index_buffer.as_ref().unwrap();
 
-        device.cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer.vk_buffer()], &[0]);
-        device.cmd_bind_index_buffer(
-            command_buffer,
-            index_buffer.vk_buffer(),
-            0,
-            vk::IndexType::UINT32,
-        );
-        device.cmd_draw_indexed(command_buffer, index_buffer.len() as u32, 1, 0, 0, 1);
+        unsafe {
+            device.cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer.vk_buffer()], &[0]);
+            device.cmd_bind_index_buffer(
+                command_buffer,
+                index_buffer.vk_buffer(),
+                0,
+                vk::IndexType::UINT32,
+            );
+            device.cmd_draw_indexed(command_buffer, index_buffer.len() as u32, 1, 0, 0, 1);
+        }
     }
 }

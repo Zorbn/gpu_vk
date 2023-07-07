@@ -71,6 +71,8 @@ impl Buffer {
 impl Drop for Buffer {
     fn drop(&mut self) {
         unsafe {
+            self.device_data.device.device_wait_idle().unwrap();
+
             self.device_data.allocator.destroy_buffer(self.vk_buffer, mem::ManuallyDrop::take(&mut self.allocation));
         }
     }

@@ -4,21 +4,23 @@ use graphics::*;
 
 struct App {
     time: f32,
+    sprite_batch: sprite_batch::SpriteBatch,
 }
 
 impl app::App for App {
-    fn new() -> Self {
+    fn new(graphics: &mut Graphics) -> Self {
         Self {
             time: 0.0,
+            sprite_batch: sprite_batch::SpriteBatch::new(graphics),
         }
     }
 
-    fn update(&mut self, delta_time: f32, sprite_batch: &mut sprite_batch::SpriteBatch) {
+    fn update(&mut self, graphics: &mut Graphics, delta_time: f32) {
         self.time += delta_time;
         let sprite_position = self.time.sin() * 320.0 + 320.0;
 
         if self.time as usize % 2 == 0 {
-            sprite_batch.batch(&[
+            self.sprite_batch.batch(&[
                 sprite_batch::Sprite {
                     x: sprite_position,
                     y: 0.0,
@@ -35,14 +37,18 @@ impl app::App for App {
                 },
             ]);
         } else {
-            sprite_batch.batch(&[]);
+            self.sprite_batch.batch(&[]);
         }
+    }
+
+    fn draw(&mut self, draw: &Draw) {
+        draw.sprite_batch(&self.sprite_batch);
     }
 }
 
 fn main() {
     unsafe {
-        let mut graphics = Graphics::<App>::new("GPU VK");
-        graphics.run();
+        let mut graphics = Graphics::new("GPU VK");
+        graphics.run::<App>();
     }
 }

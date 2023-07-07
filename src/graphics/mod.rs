@@ -23,16 +23,24 @@ pub struct Vector3 {
     pub _pad: f32,
 }
 
-pub struct Graphics<T: app::App> {
-    app: T,
+pub struct Draw<'a> {
+    device: &'a ash::Device,
+    command_buffer: vk::CommandBuffer,
+}
 
+impl<'a> Draw<'a> {
+    pub fn sprite_batch(&self, sprite_batch: &sprite_batch::SpriteBatch) {
+        sprite_batch.draw(&self.device, self.command_buffer);
+    }
+}
+
+pub struct Graphics {
     resources: Resources,
-    sprite_batch: sprite_batch::SpriteBatch,
 
     base: vk_base::VkBase,
 
-    window: winit::window::Window,
-    event_loop: EventLoop<()>,
+    window: Option<winit::window::Window>,
+    event_loop: Option<EventLoop<()>>,
 
     needs_resize: bool,
 }
@@ -68,7 +76,7 @@ struct Resources {
     projection_matrix_buffer_descriptor: vk::DescriptorBufferInfo,
 }
 
-impl<T: app::App> Graphics<T> {
+impl Graphics {
     pub unsafe fn new(title: &str) -> Self {
         let event_loop = EventLoop::new();
         let window = WindowBuilder::new()
@@ -336,8 +344,6 @@ impl<T: app::App> Graphics<T> {
             .create_graphics_pipelines(vk::PipelineCache::null(), &[graphic_pipeline_infos], None)
             .unwrap();
 
-        let mut sprite_batch = sprite_batch::SpriteBatch::new(base.device_data.clone());
-
         let projection_matrix = [0.0; 16];
         let projection_matrix_buffer = buffer::Buffer::new(
             &projection_matrix,
@@ -350,6 +356,11 @@ impl<T: app::App> Graphics<T> {
             range: mem::size_of_val(&projection_matrix) as u64,
         };
 
+        // TODO: Instead of passing "Graphics" to the App, there should be a group of resources
+        // similar to "Resources" but with access to "base" that gets passed instead. This would
+        // make the API more intuitive, you draw in the draw function and update resources in the
+        // new/update functions. Resources was originally created for ordering how things are
+        // dropped, maybe include base in resources directly and then use ManuallyDrop<> for it?
         Self {
             resources: Resources {
                 device_data: base.device_data.clone(),
@@ -377,75 +388,68 @@ impl<T: app::App> Graphics<T> {
                 projection_matrix_buffer_descriptor,
             },
 
-            app: T::new(),
-
-            sprite_batch,
-
             base,
 
-            window,
-            event_loop,
+            window: Some(window),
+            event_loop: Some(event_loop),
 
             needs_resize: true,
         }
     }
 
-    pub unsafe fn run(&mut self) {
-        let Self {
-            ref mut base,
-            ref mut window,
-            ref mut resources,
-            ..
-        } = self;
+    pub unsafe fn run<T: app::App>(&mut self) {
+        let window = self.window.take().expect("Tried to run an app without a window, running an app consumes the window it is run with");
+        let mut event_loop = self.event_loop.take().expect("Tried to run an app without an event loop, running an app consumes the event loop it is run with");
 
+        let mut app = T::new(self);
         let mut now = time::Instant::now();
 
-        VkBase::render_loop(window, &mut self.event_loop, || {
+        VkBase::render_loop(&window, &mut event_loop, || {
             let delta_time = now.elapsed().as_secs_f32();
             now = time::Instant::now();
 
-            self.app.update(delta_time, &mut self.sprite_batch);
+            app.update(self, delta_time);
 
             if self.needs_resize {
                 self.needs_resize = false;
-                base.device_data.device.device_wait_idle().unwrap();
+                self.base.device_data.device.device_wait_idle().unwrap();
 
                 let window_size = window.inner_size();
-                base.resize(window_size.width, window_size.height);
-                resources.render_pass.resize(window, &base.swapchain_data);
+                self.base.resize(window_size.width, window_size.height);
+                self.resources.render_pass.resize(&window, &self.base.swapchain_data);
 
                 // TODO: Bundle all of this stuff together into a single
                 // uniform buffer struct that can be easily updated.
                 mat4::orthographic_projection(
-                    &mut resources.projection_matrix,
+                    &mut self.resources.projection_matrix,
                     mat4::OrthographicProjectionInfo {
                         left: 0.0,
-                        right: base.surface_data.resolution.width as f32,
+                        right: self.base.surface_data.resolution.width as f32,
                         bottom: 0.0,
-                        top: base.surface_data.resolution.height as f32,
+                        top: self.base.surface_data.resolution.height as f32,
                         z_near: -mat4::Z_VIEW_DISTANCE,
                         z_far: mat4::Z_VIEW_DISTANCE,
                     },
                 );
-                resources.projection_matrix_buffer.set_data(&resources.projection_matrix);
+                self.resources.projection_matrix_buffer.set_data(&self.resources.projection_matrix);
 
                 let write_descriptor_sets = [vk::WriteDescriptorSet {
-                    dst_set: resources.descriptor_sets[0],
+                    dst_set: self.resources.descriptor_sets[0],
                     dst_binding: 2,
                     descriptor_count: 1,
                     descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-                    p_buffer_info: &resources.projection_matrix_buffer_descriptor,
+                    p_buffer_info: &self.resources.projection_matrix_buffer_descriptor,
                     ..Default::default()
                 }];
-                base.device_data
+                self.base.device_data
                     .device
                     .update_descriptor_sets(&write_descriptor_sets, &[]);
             }
 
-            let (present_index, _) = match base.swapchain_data.loader.acquire_next_image(
-                base.swapchain_data.swapchain,
+            let (present_index, _) = match self.base.swapchain_data.loader.acquire_next_image(
+                self.base.swapchain_data.swapchain,
                 std::u64::MAX,
-                base.sync_data.present_complete_semaphore,
+                self.base.sync_data.present_complete_semaphore,
                 vk::Fence::null(),
             ) {
                 Ok(values) => values,
@@ -469,57 +473,61 @@ impl<T: app::App> Graphics<T> {
                 },
             ];
 
-            resources.viewports[0].width = base.surface_data.resolution.width as f32;
-            resources.viewports[0].height = base.surface_data.resolution.height as f32;
-            resources.scissors[0].extent.width = base.surface_data.resolution.width;
-            resources.scissors[0].extent.height = base.surface_data.resolution.height;
+            self.resources.viewports[0].width = self.base.surface_data.resolution.width as f32;
+            self.resources.viewports[0].height = self.base.surface_data.resolution.height as f32;
+            self.resources.scissors[0].extent.width = self.base.surface_data.resolution.width;
+            self.resources.scissors[0].extent.height = self.base.surface_data.resolution.height;
 
-            base.device_data.record_submit(
-                base.command_data.draw_buffer,
-                base.sync_data.draw_commands_reuse_fence,
+            self.base.device_data.record_submit(
+                self.base.command_data.draw_buffer,
+                self.base.sync_data.draw_commands_reuse_fence,
                 &[vk::PipelineStageFlags::BOTTOM_OF_PIPE],
-                &[base.sync_data.present_complete_semaphore],
-                &[base.sync_data.rendering_complete_semaphore],
+                &[self.base.sync_data.present_complete_semaphore],
+                &[self.base.sync_data.rendering_complete_semaphore],
                 |device, command_buffer| {
-                    resources.render_pass.begin(
+                    self.resources.render_pass.begin(
                         device,
                         command_buffer,
-                        &base.surface_data,
+                        &self.base.surface_data,
                         present_index,
                         &clear_values,
                     );
                     device.cmd_bind_descriptor_sets(
                         command_buffer,
                         vk::PipelineBindPoint::GRAPHICS,
-                        resources.pipeline_layout,
+                        self.resources.pipeline_layout,
                         0,
-                        &resources.descriptor_sets[..],
+                        &self.resources.descriptor_sets[..],
                         &[],
                     );
                     device.cmd_bind_pipeline(
                         command_buffer,
                         vk::PipelineBindPoint::GRAPHICS,
-                        resources.pipelines[0],
+                        self.resources.pipelines[0],
                     );
-                    device.cmd_set_viewport(command_buffer, 0, &resources.viewports);
-                    device.cmd_set_scissor(command_buffer, 0, &resources.scissors);
-                    self.sprite_batch.draw(device, command_buffer);
-                    resources.render_pass.end(device, command_buffer)
+                    device.cmd_set_viewport(command_buffer, 0, &self.resources.viewports);
+                    device.cmd_set_scissor(command_buffer, 0, &self.resources.scissors);
+                    let draw = Draw{
+                        device,
+                        command_buffer,
+                    };
+                    app.draw(&draw);
+                    self.resources.render_pass.end(device, command_buffer)
                 },
             );
             let present_info = vk::PresentInfoKHR {
                 wait_semaphore_count: 1,
-                p_wait_semaphores: &base.sync_data.rendering_complete_semaphore,
+                p_wait_semaphores: &self.base.sync_data.rendering_complete_semaphore,
                 swapchain_count: 1,
-                p_swapchains: &base.swapchain_data.swapchain,
+                p_swapchains: &self.base.swapchain_data.swapchain,
                 p_image_indices: &present_index,
                 ..Default::default()
             };
 
-            match base
+            match self.base
                 .swapchain_data
                 .loader
-                .queue_present(base.device_data.present_queue, &present_info)
+                .queue_present(self.base.device_data.present_queue, &present_info)
             {
                 Ok(_) => {}
                 Err(_) => {
