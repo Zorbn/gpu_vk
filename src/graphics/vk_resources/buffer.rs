@@ -1,4 +1,8 @@
-use std::{mem::{self, align_of}, os::raw::c_void, rc};
+use std::{
+    mem::{self, align_of},
+    os::raw::c_void,
+    rc,
+};
 
 use ash::{util::Align, vk};
 use vk_mem::Alloc;
@@ -22,7 +26,8 @@ impl Buffer {
         let allocation_create_info = vk_mem::AllocationCreateInfo {
             usage: vk_mem::MemoryUsage::Auto,
             // NOTE: Staging buffers aren't used, but could be for extra performance.
-            flags: vk_mem::AllocationCreateFlags::HOST_ACCESS_SEQUENTIAL_WRITE | vk_mem::AllocationCreateFlags::MAPPED,
+            flags: vk_mem::AllocationCreateFlags::HOST_ACCESS_SEQUENTIAL_WRITE
+                | vk_mem::AllocationCreateFlags::MAPPED,
             ..Default::default()
         };
         let buffer_info = vk::BufferCreateInfo {
@@ -32,8 +37,14 @@ impl Buffer {
             ..Default::default()
         };
 
-        let (vk_buffer, allocation) = device_data.allocator.create_buffer(&buffer_info, &allocation_create_info).unwrap();
-        let allocation_info = device_data.allocator.get_allocation_info(&allocation).unwrap();
+        let (vk_buffer, allocation) = device_data
+            .allocator
+            .create_buffer(&buffer_info, &allocation_create_info)
+            .unwrap();
+        let allocation_info = device_data
+            .allocator
+            .get_allocation_info(&allocation)
+            .unwrap();
 
         let mut buffer = Self {
             device_data,
@@ -57,14 +68,17 @@ impl Buffer {
     }
 
     pub unsafe fn set_data<T: std::marker::Copy>(&mut self, data: &[T]) {
-        let data_ptr = self.device_data.allocator.map_memory(&mut self.allocation).unwrap() as *mut c_void;
-        let mut data_slice = Align::new(
-            data_ptr,
-            align_of::<T>() as u64,
-            self.allocation_info.size,
-        );
+        let data_ptr = self
+            .device_data
+            .allocator
+            .map_memory(&mut self.allocation)
+            .unwrap() as *mut c_void;
+        let mut data_slice =
+            Align::new(data_ptr, align_of::<T>() as u64, self.allocation_info.size);
         data_slice.copy_from_slice(data);
-        self.device_data.allocator.unmap_memory(&mut self.allocation);
+        self.device_data
+            .allocator
+            .unmap_memory(&mut self.allocation);
     }
 }
 
@@ -73,7 +87,10 @@ impl Drop for Buffer {
         unsafe {
             self.device_data.device.device_wait_idle().unwrap();
 
-            self.device_data.allocator.destroy_buffer(self.vk_buffer, mem::ManuallyDrop::take(&mut self.allocation));
+            self.device_data.allocator.destroy_buffer(
+                self.vk_buffer,
+                mem::ManuallyDrop::take(&mut self.allocation),
+            );
         }
     }
 }

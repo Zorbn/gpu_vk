@@ -51,13 +51,17 @@ impl SyncData {
 impl Drop for SyncData {
     fn drop(&mut self) {
         unsafe {
-            self.device_data.device
+            self.device_data
+                .device
                 .destroy_semaphore(self.present_complete_semaphore, None);
-            self.device_data.device
+            self.device_data
+                .device
                 .destroy_semaphore(self.rendering_complete_semaphore, None);
-            self.device_data.device
+            self.device_data
+                .device
                 .destroy_fence(self.draw_commands_reuse_fence, None);
-            self.device_data.device
+            self.device_data
+                .device
                 .destroy_fence(self.setup_commands_reuse_fence, None);
         }
     }

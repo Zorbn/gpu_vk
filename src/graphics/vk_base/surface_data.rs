@@ -38,7 +38,8 @@ impl SurfaceData {
     }
 
     pub unsafe fn update_surface_format(&mut self, device_data: &DeviceData) {
-        let surface_format = self.loader
+        let surface_format = self
+            .loader
             .get_physical_device_surface_formats(device_data.physical_device, self.surface)
             .unwrap()[0];
 

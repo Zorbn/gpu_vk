@@ -83,7 +83,8 @@ impl DeviceData {
 
         let allocator_create_info =
             vk_mem::AllocatorCreateInfo::new(&instance_data.instance, &device, physical_device);
-        let allocator = vk_mem::Allocator::new(allocator_create_info).expect("Failed to create VMA allocator");
+        let allocator =
+            vk_mem::Allocator::new(allocator_create_info).expect("Failed to create VMA allocator");
 
         Self {
             device,

@@ -1,8 +1,8 @@
 use std::{ffi, os::raw};
 
-use ash::{vk, extensions::ext};
+use ash::{extensions::ext, vk};
 
-use raw_window_handle::{HasRawDisplayHandle};
+use raw_window_handle::HasRawDisplayHandle;
 
 pub struct InstanceData {
     pub instance: ash::Instance,

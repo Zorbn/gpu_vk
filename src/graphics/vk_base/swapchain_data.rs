@@ -28,7 +28,10 @@ impl SwapchainData {
     ) -> Self {
         let surface_capabilities = surface_data
             .loader
-            .get_physical_device_surface_capabilities(device_data.physical_device, surface_data.surface)
+            .get_physical_device_surface_capabilities(
+                device_data.physical_device,
+                surface_data.surface,
+            )
             .unwrap();
         let mut desired_image_count = surface_capabilities.min_image_count + 1;
         if surface_capabilities.max_image_count > 0
@@ -47,7 +50,10 @@ impl SwapchainData {
         };
         let present_modes = surface_data
             .loader
-            .get_physical_device_surface_present_modes(device_data.physical_device, surface_data.surface)
+            .get_physical_device_surface_present_modes(
+                device_data.physical_device,
+                surface_data.surface,
+            )
             .unwrap();
         let present_mode = present_modes
             .iter()
@@ -251,7 +257,6 @@ impl SwapchainData {
         for &image_view in self.present_image_views.iter() {
             self.device_data.device.destroy_image_view(image_view, None);
         }
-        self.loader
-            .destroy_swapchain(self.swapchain, None);
+        self.loader.destroy_swapchain(self.swapchain, None);
     }
 }

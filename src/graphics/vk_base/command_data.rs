@@ -18,7 +18,10 @@ impl CommandData {
             .queue_family_index(device_data.queue_family_index)
             .build();
 
-        let pool = device_data.device.create_command_pool(&pool_create_info, None).unwrap();
+        let pool = device_data
+            .device
+            .create_command_pool(&pool_create_info, None)
+            .unwrap();
 
         let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
             .command_buffer_count(2)
@@ -26,7 +29,8 @@ impl CommandData {
             .level(vk::CommandBufferLevel::PRIMARY)
             .build();
 
-        let command_buffers = device_data.device
+        let command_buffers = device_data
+            .device
             .allocate_command_buffers(&command_buffer_allocate_info)
             .unwrap();
         let setup_command_buffer = command_buffers[0];
