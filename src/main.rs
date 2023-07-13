@@ -2,7 +2,7 @@ mod graphics;
 
 use graphics::{*, texture};
 
-use std::{rc};
+use std::rc;
 
 struct App {
     time: f32,
@@ -12,8 +12,8 @@ struct App {
 
 impl app::App for App {
     fn new(resources: &mut Resources) -> Self {
-        let rust_texture = rc::Rc::new(texture::Texture::new(resources, "assets/rust.png"));
-        let evil_rust_texture = rc::Rc::new(texture::Texture::new(resources, "assets/evil_rust.png"));
+        let rust_texture = rc::Rc::new(texture::Texture::new(resources, "assets/rust.png", texture::Filter::Linear));
+        let evil_rust_texture = rc::Rc::new(texture::Texture::new(resources, "assets/evil_rust.png", texture::Filter::Nearest));
 
         Self {
             time: 0.0,
@@ -24,19 +24,20 @@ impl app::App for App {
 
     fn update(&mut self, resources: &mut Resources, delta_time: f32) {
         self.time += delta_time;
+
         let sprite_position = self.time.sin() * 320.0 + 320.0;
 
         self.evil_sprite_batch.batch(&[
             sprite_batch::Sprite {
-                x: sprite_position,
-                y: 16.0,
+                x: 0.0,
+                y: sprite_position + 16.0,
                 z: 1.0,
                 width: 64.0,
                 height: 32.0,
             },
             sprite_batch::Sprite {
-                x: sprite_position + 16.0,
-                y: 32.0,
+                x: 16.0,
+                y: sprite_position + 32.0,
                 z: -1.0,
                 width: 128.0,
                 height: 64.0,
@@ -66,8 +67,8 @@ impl app::App for App {
     }
 
     fn draw(&mut self, draw: &Draw) {
-        self.sprite_batch.draw(&draw);
-        self.evil_sprite_batch.draw(&draw);
+        self.sprite_batch.draw(draw);
+        self.evil_sprite_batch.draw(draw);
     }
 }
 

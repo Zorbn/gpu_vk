@@ -6,6 +6,11 @@ use vk_mem::Alloc;
 
 use crate::graphics::{vk_base::*, vk_resources::*, *};
 
+pub enum Filter {
+    Linear,
+    Nearest
+}
+
 pub struct Texture {
     pub descriptor: vk::DescriptorImageInfo,
 
@@ -22,7 +27,7 @@ pub struct Texture {
 }
 
 impl Texture {
-    pub fn new(resources: &Resources, path: &str) -> Self {
+    pub fn new(resources: &Resources, path: &str, filter: Filter) -> Self {
         let file = fs::File::open(path).unwrap_or_else(|_| panic!("Failed to load file {}", path));
 
         let image = image::load(io::BufReader::new(file), image::ImageFormat::Png)
@@ -134,13 +139,18 @@ impl Texture {
                 },
             );
 
+            let sampler_filter = match filter {
+                Filter::Linear => vk::Filter::LINEAR,
+                Filter::Nearest => vk::Filter::NEAREST,
+            };
+
             let sampler_info = vk::SamplerCreateInfo {
-                mag_filter: vk::Filter::LINEAR,
-                min_filter: vk::Filter::LINEAR,
+                mag_filter: sampler_filter,
+                min_filter: sampler_filter,
                 mipmap_mode: vk::SamplerMipmapMode::LINEAR,
-                address_mode_u: vk::SamplerAddressMode::MIRRORED_REPEAT,
-                address_mode_v: vk::SamplerAddressMode::MIRRORED_REPEAT,
-                address_mode_w: vk::SamplerAddressMode::MIRRORED_REPEAT,
+                address_mode_u: vk::SamplerAddressMode::REPEAT,
+                address_mode_v: vk::SamplerAddressMode::REPEAT,
+                address_mode_w: vk::SamplerAddressMode::REPEAT,
                 max_anisotropy: 1.0,
                 border_color: vk::BorderColor::FLOAT_OPAQUE_WHITE,
                 compare_op: vk::CompareOp::NEVER,
