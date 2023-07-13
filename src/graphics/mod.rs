@@ -11,6 +11,7 @@ use std::{default::Default, ffi::CStr, mem, time};
 use ash::util::*;
 use ash::vk;
 
+pub use vk_base::input::*;
 use vk_base::*;
 use vk_resources::*;
 use winit::event_loop::EventLoop;
@@ -115,11 +116,11 @@ impl Graphics {
         let mut app = T::new(&mut self.resources);
         let mut now = time::Instant::now();
 
-        VkBase::render_loop(&window, &mut event_loop, || {
+        VkBase::render_loop(&window, &mut event_loop, |input| {
             let delta_time = now.elapsed().as_secs_f32();
             now = time::Instant::now();
 
-            app.update(&mut self.resources, delta_time);
+            app.update(&mut self.resources, input, delta_time);
 
             if self.needs_resize {
                 self.needs_resize = false;

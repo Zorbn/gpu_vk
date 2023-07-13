@@ -1,5 +1,6 @@
 pub mod command_data;
 pub mod device_data;
+pub mod input;
 pub mod instance_data;
 pub mod surface_data;
 pub mod swapchain_data;
@@ -24,7 +25,7 @@ use ash::vk::{
 };
 
 use winit::{
-    event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+    event::{DeviceEvent, Event, WindowEvent},
     event_loop::EventLoop,
     platform::run_return::EventLoopExtRunReturn,
 };
@@ -84,24 +85,17 @@ pub struct VkBase {
 }
 
 impl VkBase {
-    pub fn render_loop<F: FnMut()>(
+    pub fn render_loop<F: FnMut(&mut input::Input)>(
         window: &winit::window::Window,
         event_loop: &mut EventLoop<()>,
         mut f: F,
     ) {
+        let mut input = input::Input::new();
+
         event_loop.run_return(|event, _, control_flow| match event {
+            Event::WindowEvent { ref event, .. } if input.process_button(event) => {}
             Event::WindowEvent {
-                event:
-                    WindowEvent::CloseRequested
-                    | WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::Escape),
-                                ..
-                            },
-                        ..
-                    },
+                event: WindowEvent::CloseRequested,
                 ..
             } => control_flow.set_exit(),
             Event::MainEventsCleared
@@ -118,8 +112,13 @@ impl VkBase {
 
                 control_flow.set_poll();
 
-                f();
+                f(&mut input);
+                input.update();
             }
+            Event::DeviceEvent {
+                event: DeviceEvent::MouseMotion { delta: (x, y) },
+                ..
+            } => input.process_mouse_motion(x as f32, y as f32),
             _ => (),
         });
     }

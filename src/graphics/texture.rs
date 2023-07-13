@@ -8,7 +8,7 @@ use crate::graphics::{vk_base::*, vk_resources::*, *};
 
 pub enum Filter {
     Linear,
-    Nearest
+    Nearest,
 }
 
 pub struct Texture {
